@@ -520,12 +520,16 @@ async function submitBooking() {
       date: selectedDate, time: selectedTime,
       name: formData.name, menuId: formData.menuId, conditionId: formData.conditionId,
     });
-    await fetch(`${GAS_URL}?${params.toString()}`, { mode: 'no-cors' });
-    // no-corsではレスポンスが読めないので2秒待ってからリロード
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    closePanel();
-    showDone({ id: '予約完了', date: selectedDate, time: selectedTime });
-    await loadWeek();
+    const res  = await fetch(`${GAS_URL}?${params.toString()}`);
+    const data = await res.json();
+    if (data.success) {
+      closePanel();
+      showDone(data.reservation);
+      await loadWeek();
+    } else {
+      showToast(data.message || '予約に失敗しました');
+      btn.disabled = false; btn.textContent = '予約を確定する';
+    }
   } catch(e) {
     showToast('通信エラーが発生しました: ' + e.message);
     btn.disabled = false; btn.textContent = '予約を確定する';
