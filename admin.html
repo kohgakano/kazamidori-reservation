@@ -277,7 +277,8 @@ async function init() {
     const res  = await fetch(`${GAS_URL}?action=getSettings&userId=${userId}`);
     const data = await res.json();
     if (data.closed_days !== undefined) {
-      CLOSED_DAYS = String(data.closed_days).split(',').map(Number).filter(n => !isNaN(n));
+      const val = String(data.closed_days).trim();
+      CLOSED_DAYS = val ? val.split(',').map(Number).filter(n => !isNaN(n)) : [];
     }
   } catch(e) {}
 
@@ -598,7 +599,8 @@ async function openSettings() {
     const res  = await fetch(`${GAS_URL}?action=getSettings&userId=${userId}`);
     const data = await res.json();
     if (data.closed_days !== undefined) {
-      settingsClosedDays = String(data.closed_days).split(',').map(Number).filter(n => !isNaN(n));
+      const val2 = String(data.closed_days).trim();
+      settingsClosedDays = val2 ? val2.split(',').map(Number).filter(n => !isNaN(n)) : [];
     } else {
       settingsClosedDays = [...CLOSED_DAYS];
     }
