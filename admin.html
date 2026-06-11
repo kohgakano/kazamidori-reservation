@@ -137,6 +137,35 @@
   .btn-cancel-booking { background: #fdf0f0; color: #c0392b; border: 1.5px solid #e8c0c0; border-radius: var(--radius); padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--font); }
   .btn-cancel-booking:hover { background: #f8d7d7; }
 
+
+  /* ======= 管理者予約入力パネル ======= */
+  .admin-booking-panel {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #fff; border-radius: 16px 16px 0 0;
+    box-shadow: 0 -4px 20px rgba(0,0,0,.15);
+    transform: translateY(100%); transition: transform .3s ease;
+    z-index: 300; max-width: 480px; margin: 0 auto;
+  }
+  .admin-booking-panel.open { transform: translateY(0); }
+  .panel-handle { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 8px; border-bottom: 1px solid #f0f0f0; }
+  .panel-handle h3 { font-size: 14px; font-weight: 700; color: var(--teal); }
+  .panel-close-btn { background: none; border: none; font-size: 18px; color: #aaa; cursor: pointer; }
+  .panel-badge { margin: 8px 14px; background: var(--teal-light); border-radius: 6px; padding: 7px 12px; font-size: 13px; color: var(--teal); font-weight: 600; }
+  .panel-body { padding: 8px 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .field-lbl { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .req-badge { background: #c0392b; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 4px; border-radius: 3px; margin-left: 4px; }
+  .txt-input { width: 100%; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 10px 12px; font-size: 15px; font-family: var(--font); outline: none; }
+  .txt-input:focus { border-color: var(--teal); }
+  .btn-row-admin { display: flex; gap: 7px; flex-wrap: wrap; }
+  .sel-btn-admin { flex: 1; min-width: 0; border: 2px solid var(--border); border-radius: var(--radius); padding: 8px 6px; cursor: pointer; text-align: center; background: #fff; font-family: var(--font); }
+  .sel-btn-admin.selected { border-color: var(--teal); background: var(--teal-light); }
+  .sel-btn-admin .sb-icon { font-size: 18px; display: block; }
+  .sel-btn-admin .sb-label { font-size: 12px; font-weight: 700; margin-top: 2px; }
+  .btn-admin-book { width: 100%; background: var(--teal); color: #fff; border: none; border-radius: var(--radius); padding: 14px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: var(--font); }
+  .btn-admin-book:disabled { background: #aaa; cursor: default; }
+  .empty-clickable { cursor: pointer; transition: background .15s; }
+  .empty-clickable:hover { background: #d4ede9 !important; }
+
   /* トースト */
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(10px); background: #333; color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 13px; opacity: 0; transition: all .3s; z-index: 400; white-space: nowrap; pointer-events: none; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -164,6 +193,31 @@
 
 <div id="mainContent">
   <div class="loading"><div class="spinner"></div> 読み込み中…</div>
+</div>
+
+
+<!-- 管理者予約入力パネル -->
+<div class="admin-booking-panel" id="adminBookingPanel">
+  <div class="panel-handle">
+    <h3>➕ 予約を追加</h3>
+    <button class="panel-close-btn" onclick="closeAdminPanel()">✕</button>
+  </div>
+  <div class="panel-badge" id="adminPanelBadge"></div>
+  <div class="panel-body">
+    <div>
+      <div class="field-lbl">👤 氏名<span class="req-badge">必須</span></div>
+      <input type="text" class="txt-input" id="adminInputName" placeholder="例：山田 太郎" oninput="validateAdminForm()">
+    </div>
+    <div>
+      <div class="field-lbl">🩹 施術メニュー<span class="req-badge">必須</span></div>
+      <div class="btn-row-admin" id="adminMenuBtns"></div>
+    </div>
+    <div id="adminConditionArea" style="display:none">
+      <div class="field-lbl">💬 現在の症状<span class="req-badge">必須</span></div>
+      <div class="btn-row-admin" id="adminConditionBtns"></div>
+    </div>
+    <button class="btn-admin-book" id="btnAdminBook" onclick="submitAdminBooking()" disabled>予約を追加する</button>
+  </div>
 </div>
 
 <!-- 詳細モーダル -->
@@ -330,7 +384,7 @@ function renderWeek(dates) {
       } else if (isBlocked) {
         html += `<td class="blocked-cell"><div class="blocked-label">🔒</div></td>`;
       } else if (reservations.length === 0) {
-        html += `<td class="empty-cell ${isToday?'today-bg':''}"></td>`;
+        html += `<td class="empty-cell empty-clickable ${isToday?'today-bg':''}" onclick="openAdminBooking('${ds}','${time}')" title="タップして予約追加"></td>`;
       } else {
         const names = reservations.map(r => r.name || '未入力');
         const isMulti = reservations.length > 1;
@@ -391,7 +445,7 @@ function renderDay(date) {
       html += `<div class="timeline-row">
         <div class="tl-time">${time}</div>
         <div class="tl-content">
-          ${reservations.length === 0 ? '<span class="tl-empty">空き</span>' : cards}
+          ${reservations.length === 0 ? `<span class="tl-empty" style="cursor:pointer;color:var(--teal)" onclick="openAdminBooking('${ds}','${time}')">＋ 予約を追加</span>` : cards}
         </div>
       </div>`;
     }
