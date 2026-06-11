@@ -376,7 +376,7 @@ function renderWeek(dates) {
   times.forEach(time => {
     html += `<tr><td class="time-cell">${time}</td>`;
     dates.forEach(d => {
-      const ds      = formatDate(d);
+      const ds       = formatDate(d);
       const isClosed = CLOSED_DAYS.includes(d.getDay());
       const isToday  = ds === today;
       const reservations = allSlots[ds]?.[time] || [];
@@ -389,18 +389,27 @@ function renderWeek(dates) {
       } else if (reservations.length === 0) {
         html += `<td class="empty-cell empty-clickable ${isToday?'today-bg':''}" onclick="openAdminBooking('${ds}','${time}')" title="タップして予約追加"></td>`;
       } else {
-        const names = reservations.map(r => r.name || '未入力');
+        const names   = reservations.map(r => r.name || '未入力');
         const isMulti = reservations.length > 1;
-        const ids = JSON.stringify(reservations.map(r => r.id));
         if (isMulti) {
           html += `<td class="${isToday?'today-bg':''}">
-            <div class="booking-cell multi" onclick="showMultiList('${ds}','${time}')">
-              <span class="booking-count" style="font-size:14px;font-weight:700">${reservations.length}名</span>
+            <div style="display:flex;flex-direction:column;height:100%">
+              <div class="booking-cell multi" style="flex:1" onclick="showMultiList('${ds}','${time}')">
+                <span class="booking-count" style="font-size:14px;font-weight:700">${reservations.length}名</span>
+              </div>
+              <div style="background:#1a9e8a;height:10px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="openAdminBooking('${ds}','${time}')">
+                <span style="color:#fff;font-size:9px">＋</span>
+              </div>
             </div></td>`;
         } else {
           html += `<td class="${isToday?'today-bg':''}">
-            <div class="booking-cell" onclick="showDetail('${reservations[0].id}')">
-              <span class="booking-name">${names[0]}</span>
+            <div style="display:flex;flex-direction:column;height:100%">
+              <div class="booking-cell" style="flex:1" onclick="showDetail('${reservations[0].id}')">
+                <span class="booking-name">${names[0]}</span>
+              </div>
+              <div style="background:#1a9e8a;height:10px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="openAdminBooking('${ds}','${time}')">
+                <span style="color:#fff;font-size:9px">＋</span>
+              </div>
             </div></td>`;
         }
       }
@@ -411,13 +420,13 @@ function renderWeek(dates) {
   html += '</tbody></table></div>';
   document.getElementById('mainContent').innerHTML = html;
 }
-
+  
 // ============================================================
 // 日ビュー描画
 // ============================================================
 function renderDay(date) {
-  const times  = generateTimes();
-  const ds     = formatDate(date);
+  const times     = generateTimes();
+  const ds        = formatDate(date);
   const dateLabel = `${date.getMonth()+1}月${date.getDate()}日（${DAY_NAMES[date.getDay()]}）`;
 
   let html = `<div class="day-wrap">
@@ -426,8 +435,8 @@ function renderDay(date) {
 
   times.forEach(time => {
     const reservations = allSlots[ds]?.[time] || [];
-    const isBlocked = reservations.some(r => r.status === 'blocked');
-    const isClosed  = CLOSED_DAYS.includes(date.getDay());
+    const isBlocked    = reservations.some(r => r.status === 'blocked');
+    const isClosed     = CLOSED_DAYS.includes(date.getDay());
 
     if (isClosed) {
       html += `<div class="timeline-row tl-blocked">
@@ -439,6 +448,13 @@ function renderDay(date) {
         <div class="tl-time">${time}</div>
         <div class="tl-content">🔒 ブロック済み</div>
       </div>`;
+    } else if (reservations.length === 0) {
+      html += `<div class="timeline-row">
+        <div class="tl-time">${time}</div>
+        <div class="tl-content">
+          <span class="tl-empty" style="cursor:pointer;color:var(--teal)" onclick="openAdminBooking('${ds}','${time}')">＋ 予約を追加</span>
+        </div>
+      </div>`;
     } else {
       const cards = reservations.map(r => `
         <div class="booking-card" onclick="showDetail('${r.id}')">
@@ -448,7 +464,8 @@ function renderDay(date) {
       html += `<div class="timeline-row">
         <div class="tl-time">${time}</div>
         <div class="tl-content">
-          ${reservations.length === 0 ? `<span class="tl-empty" style="cursor:pointer;color:var(--teal)" onclick="openAdminBooking('${ds}','${time}')">＋ 予約を追加</span>` : cards}
+          ${cards}
+          <div style="cursor:pointer;color:var(--teal);font-size:12px;font-weight:700;padding:4px 8px;border:1.5px dashed var(--teal);border-radius:4px" onclick="openAdminBooking('${ds}','${time}')">＋ 追加</div>
         </div>
       </div>`;
     }
