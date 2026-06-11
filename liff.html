@@ -3,206 +3,271 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>管理者カレンダー</title>
+<title>ご予約</title>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <style>
   :root {
-    --teal:       #2a7a6f;
-    --teal-light: #e8f4f2;
-    --teal-mid:   #4aab9c;
-    --blocked:    #2c2c2c;
-    --booked:     #2E86AB;
-    --empty:      #f4f9f8;
-    --border:     #d0d0d0;
-    --text:       #2c2c2c;
-    --sub:        #777777;
-    --radius:     6px;
-    --font:       'Hiragino Sans','Noto Sans JP',sans-serif;
+    --teal:      #2a7a6f;
+    --teal-light:#e8f4f2;
+    --teal-mid:  #4aab9c;
+    --full:      #f5e6e6;
+    --full-text: #c0392b;
+    --open:      #e8f4f2;
+    --open-text: #2a7a6f;
+    --border:    #d0d0d0;
+    --text:      #2c2c2c;
+    --sub:       #777;
+    --radius:    8px;
+    --font:      'Hiragino Sans', 'Noto Sans JP', sans-serif;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: var(--font); background: #f0f4f3; color: var(--text); font-size: 13px; }
+  body { font-family: var(--font); background: #f4f6f5; color: var(--text); font-size: 14px; }
 
+  /* ヘッダー */
   header {
     background: var(--teal); color: #fff;
-    padding: 10px 14px;
+    padding: 12px 16px;
     display: flex; align-items: center; justify-content: space-between;
-    position: sticky; top: 0; z-index: 100; gap: 8px;
+    position: sticky; top: 0; z-index: 100;
   }
-  header h1 { font-size: 14px; font-weight: 700; white-space: nowrap; }
-  .header-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-  .view-tabs { display: flex; background: rgba(0,0,0,.2); border-radius: 6px; overflow: hidden; }
-  .view-tab { padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; color: rgba(255,255,255,.7); border: none; background: none; font-family: var(--font); }
-  .view-tab.active { background: #fff; color: var(--teal); }
-  .nav-btn { background: rgba(255,255,255,.2); border: none; color: #fff; padding: 5px 9px; border-radius: 4px; font-size: 13px; cursor: pointer; font-family: var(--font); }
-  .nav-btn:disabled { opacity: .4; }
-  .nav-label { font-size: 12px; font-weight: 500; white-space: nowrap; min-width: 100px; text-align: center; }
+  header h1 { font-size: 16px; font-weight: 600; }
+  .week-nav { display: flex; align-items: center; gap: 8px; }
+  .week-nav button {
+    background: rgba(255,255,255,.2); border: none; color: #fff;
+    padding: 5px 10px; border-radius: 4px; font-size: 13px; cursor: pointer;
+  }
+  .week-nav button:disabled { opacity: .4; cursor: default; }
+  .week-label { font-size: 13px; font-weight: 500; white-space: nowrap; }
 
-  .loading { display: flex; align-items: center; justify-content: center; min-height: 200px; color: var(--sub); gap: 8px; }
+  /* カレンダー */
+  .calendar-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 10px 0 8px; }
+  table {
+    border-collapse: collapse; background: #fff;
+    margin: 0 10px; width: calc(100% - 20px);
+    border-radius: var(--radius); overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  }
+  thead th {
+    background: var(--teal); color: #fff;
+    padding: 6px 2px; text-align: center;
+    font-weight: 600; font-size: 11px;
+    border-right: 1px solid rgba(255,255,255,.15); white-space: nowrap;
+  }
+  thead th.time-col { background: #1f5f56; width: 40px; min-width: 40px; }
+  thead th.today-col { background: #1a9e8a; }
+  thead th.closed-col { background: #888; }
+  .day-num { font-size: 14px; font-weight: 700; display: block; }
+  .day-name { font-size: 10px; opacity: .85; }
+  td.time-cell {
+    background: #f7faf9; color: var(--sub); font-size: 11px; font-weight: 600;
+    text-align: center; padding: 0 2px;
+    border-right: 2px solid var(--teal); border-bottom: 1px solid var(--border);
+    white-space: nowrap; height: 32px;
+  }
+  td.slot-cell {
+    text-align: center; padding: 2px;
+    border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); height: 32px;
+  }
+  td.slot-cell.selected-slot { background: #fff3cd; }
+  .slot-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 26px; border-radius: 4px; border: none;
+    font-size: 16px; font-weight: 700; cursor: pointer; transition: transform .1s;
+  }
+  .slot-btn:active { transform: scale(.9); }
+  .slot-open { background: var(--open); color: var(--open-text); }
+  .slot-open:hover { background: var(--teal-mid); color: #fff; }
+  .slot-open.active { background: var(--teal); color: #fff; box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--teal); }
+  .slot-full { background: var(--full); color: var(--full-text); cursor: default; }
+  .slot-closed { background: transparent; color: #ccc; cursor: default; font-size: 12px; }
+  td.closed-day { background: #f0f0f0; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .closed-label { display: flex; align-items: center; justify-content: center; height: 100%; color: #aaa; font-size: 10px; }
+  td.today-cell { background: #fffdf0; }
+
+  /* 凡例 */
+  .legend {
+    display: flex; gap: 12px; padding: 6px 12px;
+    font-size: 11px; color: var(--sub); background: #fff;
+    border-top: 1px solid var(--border); justify-content: center;
+  }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .legend-dot { width: 18px; height: 18px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+
+  /* ========== 予約フォームパネル（下部固定） ========== */
+  .booking-panel {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #fff;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -4px 20px rgba(0,0,0,.15);
+    transform: translateY(100%);
+    transition: transform .3s ease;
+    z-index: 200;
+    max-width: 480px; margin: 0 auto;
+  }
+  .booking-panel.open { transform: translateY(0); }
+
+  .panel-handle {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px 8px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .panel-handle h3 { font-size: 14px; font-weight: 700; color: var(--teal); }
+  .panel-close { background: none; border: none; font-size: 18px; color: #aaa; cursor: pointer; padding: 2px 6px; }
+
+  /* 選択日時バッジ */
+  .selected-badge {
+    margin: 8px 14px;
+    background: var(--teal-light); border-radius: 6px;
+    padding: 7px 12px; font-size: 13px; color: var(--teal); font-weight: 600;
+  }
+
+  /* フォーム本体 */
+  .panel-body { padding: 8px 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+  .field-label {
+    font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 4px;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .req { background: #c0392b; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 4px; border-radius: 3px; }
+
+  .text-input {
+    width: 100%; border: 1.5px solid var(--border); border-radius: var(--radius);
+    padding: 10px 12px; font-size: 15px; font-family: var(--font); outline: none;
+    transition: border-color .15s;
+  }
+  .text-input:focus { border-color: var(--teal); }
+
+  /* 横並びボタン選択 */
+  .btn-row { display: flex; gap: 7px; flex-wrap: wrap; }
+
+  .sel-btn {
+    flex: 1; min-width: 0;
+    border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 8px 6px; cursor: pointer; text-align: center;
+    background: #fff; transition: all .15s; white-space: nowrap;
+    font-family: var(--font);
+  }
+  .sel-btn:hover { border-color: var(--teal-mid); background: var(--teal-light); }
+  .sel-btn.selected { border-color: var(--teal); background: var(--teal-light); }
+  .sel-btn .sb-icon { font-size: 18px; display: block; }
+  .sel-btn .sb-label { font-size: 12px; font-weight: 700; margin-top: 2px; }
+
+  /* 予約ボタン */
+  .btn-book {
+    width: 100%; background: var(--teal); color: #fff; border: none;
+    border-radius: var(--radius); padding: 14px;
+    font-size: 15px; font-weight: 700; cursor: pointer;
+    transition: background .15s; font-family: var(--font);
+  }
+  .btn-book:hover { background: #1f5f56; }
+  .btn-book:disabled { background: #aaa; cursor: default; }
+
+  /* 完了画面 */
+  .done-screen {
+    display: none; position: fixed; inset: 0; background: #fff;
+    z-index: 300; flex-direction: column; align-items: center;
+    justify-content: center; padding: 32px; text-align: center;
+  }
+  .done-screen.open { display: flex; }
+  .done-icon { font-size: 56px; margin-bottom: 12px; }
+  .done-screen h2 { font-size: 20px; font-weight: 700; color: var(--teal); margin-bottom: 8px; }
+  .done-detail {
+    background: var(--teal-light); border-radius: var(--radius);
+    padding: 14px 18px; margin: 16px 0;
+    width: 100%; max-width: 320px; text-align: left;
+  }
+  .done-detail p { font-size: 14px; margin-bottom: 5px; }
+  .done-detail p span { font-weight: 700; }
+  .done-screen > p { color: var(--sub); font-size: 13px; line-height: 1.7; }
+  .btn-close {
+    background: var(--teal); color: #fff; border: none;
+    border-radius: var(--radius); padding: 13px 28px;
+    font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 12px;
+  }
+
+  /* ローディング */
+  .loading { display: flex; align-items: center; justify-content: center; min-height: 160px; color: var(--sub); gap: 10px; }
   .spinner { width: 18px; height: 18px; border: 2px solid #ddd; border-top-color: var(--teal); border-radius: 50%; animation: spin .7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* 週ビュー */
-  .week-wrap { overflow-x: auto; padding: 10px; }
-  .week-table { border-collapse: collapse; background: #fff; border-radius: var(--radius); overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); min-width: 100%; }
-  .week-table th { background: var(--teal); color: #fff; padding: 6px 4px; text-align: center; font-size: 11px; border-right: 1px solid rgba(255,255,255,.15); white-space: nowrap; }
-  .week-table th.time-col { background: #1f5f56; width: 42px; min-width: 42px; }
-  .week-table th.today-col { background: #1a9e8a; }
-  .week-table th.closed-col { background: #888888; }
-  .day-num { font-size: 13px; font-weight: 700; display: block; }
-  .day-name { font-size: 10px; opacity: .8; }
-  .week-table td { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); height: 36px; vertical-align: middle; }
-  td.time-cell { background: #f7faf9; color: var(--sub); font-size: 11px; font-weight: 600; text-align: center; border-right: 2px solid var(--teal); white-space: nowrap; padding: 0 3px; }
-  td.closed-cell { background: #1a1a1a; }
-  td.today-bg { background: #fffdf0; }
-  td.empty-cell { background: var(--empty); }
-  .booking-cell { background: var(--booked); padding: 2px 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; transition: filter .15s; }
-  .booking-cell:hover { filter: brightness(1.15); }
-  .booking-cell.multi { background: #1a6b5a; }
-  .booking-name { color: #fff; font-size: 11px; font-weight: 600; text-align: center; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52px; }
-  .booking-count { color: rgba(255,255,255,.85); font-size: 10px; }
-  td.blocked-cell { background: var(--blocked); }
-  .blocked-label { color: #666666; font-size: 10px; text-align: center; }
-  .empty-clickable { cursor: pointer; transition: background .15s; }
-  .empty-clickable:hover { background: #d4ede9 !important; }
-
-  /* 日ビュー */
-  .day-wrap { padding: 10px; }
-  .day-timeline { background: #fff; border-radius: var(--radius); box-shadow: 0 1px 4px rgba(0,0,0,.08); overflow: hidden; }
-  .timeline-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); min-height: 44px; }
-  .timeline-row:last-child { border-bottom: none; }
-  .tl-time { width: 52px; flex-shrink: 0; background: #f7faf9; color: var(--sub); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; border-right: 2px solid var(--teal); padding: 4px 0; }
-  .tl-content { flex: 1; display: flex; align-items: center; padding: 4px 8px; gap: 6px; flex-wrap: wrap; }
-  .tl-empty { color: #cccccc; font-size: 12px; }
-  .tl-blocked { background: #1a1a1a; }
-  .tl-blocked .tl-time { background: #111111; color: #555555; border-color: #333333; }
-  .tl-blocked .tl-content { color: #555555; font-size: 11px; }
-  .booking-card { background: var(--booked); color: #fff; border-radius: 4px; padding: 5px 9px; cursor: pointer; transition: filter .15s; display: flex; flex-direction: column; gap: 1px; }
-  .booking-card:hover { filter: brightness(1.15); }
-  .booking-card .card-name { font-size: 13px; font-weight: 700; }
-  .booking-card .card-menu { font-size: 11px; opacity: .85; }
-
-  /* モーダル共通 */
-  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200; align-items: flex-end; justify-content: center; }
-  .modal-overlay.open { display: flex; }
-  .modal { background: #fff; border-radius: 16px 16px 0 0; width: 100%; max-width: 480px; padding: 24px 20px 36px; animation: slideUp .2s ease; max-height: 90vh; overflow-y: auto; }
-  @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-  .modal-title { font-size: 16px; font-weight: 700; color: var(--teal); margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; }
-  .modal-close { background: none; border: none; font-size: 20px; color: #aaaaaa; cursor: pointer; }
-  .detail-grid { display: flex; flex-direction: column; gap: 10px; }
-  .detail-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: #f9f9f9; border-radius: var(--radius); }
-  .detail-key { font-size: 12px; color: var(--sub); width: 72px; flex-shrink: 0; padding-top: 1px; }
-  .detail-val { font-size: 14px; font-weight: 600; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-  .badge-confirmed { background: var(--teal-light); color: var(--teal); }
-  .modal-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
-  .btn-cancel-booking { background: #fdf0f0; color: #c0392b; border: 1.5px solid #e8c0c0; border-radius: var(--radius); padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--font); }
-
-  /* 管理者予約入力パネル */
-  .admin-booking-panel { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-radius: 16px 16px 0 0; box-shadow: 0 -4px 20px rgba(0,0,0,.15); transform: translateY(100%); transition: transform .3s ease; z-index: 300; max-width: 480px; margin: 0 auto; }
-  .admin-booking-panel.open { transform: translateY(0); }
-  .panel-handle { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 8px; border-bottom: 1px solid #f0f0f0; }
-  .panel-handle h3 { font-size: 14px; font-weight: 700; color: var(--teal); }
-  .panel-close-btn { background: none; border: none; font-size: 18px; color: #aaaaaa; cursor: pointer; }
-  .panel-badge { margin: 8px 14px; background: var(--teal-light); border-radius: 6px; padding: 7px 12px; font-size: 13px; color: var(--teal); font-weight: 600; }
-  .panel-body { padding: 8px 14px 16px; display: flex; flex-direction: column; gap: 10px; }
-  .field-lbl { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
-  .req-badge { background: #c0392b; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 4px; border-radius: 3px; margin-left: 4px; }
-  .txt-input { width: 100%; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 10px 12px; font-size: 15px; font-family: var(--font); outline: none; }
-  .txt-input:focus { border-color: var(--teal); }
-  .btn-row-admin { display: flex; gap: 7px; flex-wrap: wrap; }
-  .sel-btn-admin { flex: 1; min-width: 0; border: 2px solid var(--border); border-radius: var(--radius); padding: 8px 6px; cursor: pointer; text-align: center; background: #fff; font-family: var(--font); }
-  .sel-btn-admin.selected { border-color: var(--teal); background: var(--teal-light); }
-  .sel-btn-admin .sb-icon { font-size: 18px; display: block; }
-  .sel-btn-admin .sb-label { font-size: 12px; font-weight: 700; margin-top: 2px; }
-  .btn-admin-book { width: 100%; background: var(--teal); color: #fff; border: none; border-radius: var(--radius); padding: 14px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: var(--font); }
-  .btn-admin-book:disabled { background: #aaaaaa; cursor: default; }
-
   /* トースト */
-  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(10px); background: #333333; color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 13px; opacity: 0; transition: all .3s; z-index: 500; white-space: nowrap; pointer-events: none; }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(10px);
+    background: #333; color: #fff; padding: 10px 20px; border-radius: 20px;
+    font-size: 13px; opacity: 0; transition: all .3s; z-index: 500;
+    white-space: nowrap; pointer-events: none;
+  }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-  /* 未認証 */
-  .unauth { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; gap: 12px; padding: 32px; text-align: center; }
-  .unauth h2 { font-size: 18px; color: #c0392b; }
-  .unauth p { color: var(--sub); font-size: 14px; line-height: 1.7; }
 </style>
 </head>
 <body>
 
-<header style="flex-direction:column;gap:8px;padding:8px 14px">
-  <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
-    <h1>⚙️ 管理カレンダー</h1>
-    <div style="display:flex;align-items:center;gap:6px">
-      <button class="nav-btn" onclick="openSettings()">⚙️ 設定</button>
-      <div class="view-tabs">
-        <button class="view-tab active" id="tabWeek" onclick="switchView('week')">週</button>
-        <button class="view-tab" id="tabDay" onclick="switchView('day')">日</button>
-      </div>
-    </div>
-  </div>
-  <div style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%">
-    <button class="nav-btn" id="btnPrev" onclick="navigate(-1)">‹ 前</button>
-    <span class="nav-label" id="navLabel" style="min-width:140px;text-align:center"></span>
-    <button class="nav-btn" id="btnNext" onclick="navigate(1)">次 ›</button>
+<header>
+  <h1>🏥 ご予約</h1>
+  <div class="week-nav">
+    <button id="prevWeek" onclick="changeWeek(-1)" disabled>‹ 前週</button>
+    <span class="week-label" id="weekLabel"></span>
+    <button id="nextWeek" onclick="changeWeek(1)">次週 ›</button>
   </div>
 </header>
 
-<div id="mainContent">
-  <div class="loading"><div class="spinner"></div> 読み込み中…</div>
+<div class="calendar-wrap">
+  <div id="calendarBody" class="loading">
+    <div class="spinner"></div> 読み込み中…
+  </div>
 </div>
 
-<!-- 管理者予約入力パネル -->
-<div class="admin-booking-panel" id="adminBookingPanel">
+<div class="legend">
+  <div class="legend-item">
+    <div class="legend-dot" style="background:var(--open);color:var(--open-text)">○</div><span>空きあり</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:var(--full);color:var(--full-text)">×</div><span>満枠</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#f0f0f0;color:#aaa;font-size:10px">休</div><span>休業日</span>
+  </div>
+</div>
+
+<!-- 下部スライドパネル -->
+<div class="booking-panel" id="bookingPanel">
   <div class="panel-handle">
-    <h3>➕ 予約を追加</h3>
-    <button class="panel-close-btn" onclick="closeAdminPanel()">✕</button>
+    <h3>予約情報の入力</h3>
+    <button class="panel-close" onclick="closePanel()">✕</button>
   </div>
-  <div class="panel-badge" id="adminPanelBadge"></div>
+  <div class="selected-badge" id="selectedBadge"></div>
   <div class="panel-body">
+
+    <!-- 氏名 -->
     <div>
-      <div class="field-lbl">👤 氏名<span class="req-badge">必須</span></div>
-      <input type="text" class="txt-input" id="adminInputName" placeholder="例：山田 太郎" oninput="validateAdminForm()">
+      <div class="field-label">👤 氏名 <span class="req">必須</span></div>
+      <input type="text" class="text-input" id="inputName" placeholder="例：山田 太郎" oninput="validateForm()">
     </div>
+
+    <!-- 施術メニュー -->
     <div>
-      <div class="field-lbl">🩹 施術メニュー<span class="req-badge">必須</span></div>
-      <div class="btn-row-admin" id="adminMenuBtns"></div>
+      <div class="field-label">🩹 施術メニュー <span class="req">必須</span></div>
+      <div class="btn-row" id="menuBtns"></div>
     </div>
-    <div id="adminConditionArea" style="display:none">
-      <div class="field-lbl">💬 現在の症状<span class="req-badge">必須</span></div>
-      <div class="btn-row-admin" id="adminConditionBtns"></div>
+
+    <!-- 症状（メニュー選択後に表示） -->
+    <div id="conditionArea" style="display:none">
+      <div class="field-label">💬 現在の症状 <span class="req">必須</span></div>
+      <div class="btn-row" id="conditionBtns"></div>
     </div>
-    <button class="btn-admin-book" id="btnAdminBook" onclick="submitAdminBooking()" disabled>予約を追加する</button>
+
+    <!-- 予約ボタン -->
+    <button class="btn-book" id="btnBook" onclick="submitBooking()" disabled>予約を確定する</button>
   </div>
 </div>
 
-<!-- 設定パネル -->
-<div class="modal-overlay" id="settingsOverlay" onclick="closeSettings(event)">
-  <div class="modal">
-    <div class="modal-title">
-      <span>⚙️ 営業設定</span>
-      <button class="modal-close" onclick="closeSettingsDirect()">✕</button>
-    </div>
-    <div style="margin-bottom:16px">
-      <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text)">定休日</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap" id="closedDayBtns"></div>
-    </div>
-    <button id="btnSaveSettings" onclick="saveSettingsFromUI()"
-      style="width:100%;background:var(--teal);color:#fff;border:none;border-radius:8px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">
-      保存する
-    </button>
-  </div>
-</div>
-
-<!-- 詳細モーダル -->
-<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
-  <div class="modal">
-    <div class="modal-title">
-      <span>予約詳細</span>
-      <button class="modal-close" onclick="closeModalDirect()">✕</button>
-    </div>
-    <div class="detail-grid" id="detailGrid"></div>
-    <div class="modal-actions" id="modalActions"></div>
-  </div>
+<!-- 完了画面 -->
+<div class="done-screen" id="doneScreen">
+  <div class="done-icon">✅</div>
+  <h2>予約完了！</h2>
+  <div class="done-detail" id="doneDetail"></div>
+  <p>前日にリマインドをお送りします。</p>
+  <button class="btn-close" onclick="closeDone()">閉じる</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -211,454 +276,296 @@
 // ============================================================
 // 設定
 // ============================================================
-const GAS_URL     = 'https://script.google.com/macros/s/AKfycbw-JsEZlCOe6FeItSrj18jK2hOx84rRzSBqpLId6eyDH5--pgEkxJiPWsx09ln82wMf/exec';
-const LIFF_ID_ADMIN = '2010369051-2a4AtkBu'; // 管理者用LIFFのID（別途作成）
-const ADMIN_IDS   = ['U715fc71e2b7b3501161496aa934c0419','Ufaa1a7d88eb066170c59db13ccaeff2c',]; // Admin.gsと同じIDを入れる
-const SLOT_MIN      = 60;
-const DAY_START     = 9;
-const DAY_END       = 24;
-let   CLOSED_DAYS   = []; // 設定シートから動的に読み込む
-const DAY_NAMES     = ['日','月','火','水','木','金','土'];
+const GAS_URL      = 'https://script.google.com/macros/s/AKfycbw-JsEZlCOe6FeItSrj18jK2hOx84rRzSBqpLId6eyDH5--pgEkxJiPWsx09ln82wMf/exec';
+const LIFF_ID      = '2010369051-b9OGqRDi';
+const MAX_PER_SLOT = 5;
+const SLOT_MIN     = 60;
+const DAY_START    = 9;
+const DAY_END      = 24;
+let CLOSED_DAYS    = []; // 設定シートから動的に読み込む
+let HOLIDAY_DATES  = []; // 臨時休業日
+const DAY_NAMES    = ['日','月','火','水','木','金','土'];
 
-const MENU_LABELS = { normal: '通常施術' };
-const COND_LABELS = {
-  normal: { better: '😊 良くなっている', same: '😐 変わらない', worse: '😟 悪化している' }
-};
-
-const ADMIN_MENUS = [
+// 施術メニュー（ここを編集して追加できます）
+const MENUS = [
   {
-    id: 'normal', icon: '🩹', label: '通常施術',
+    id: 'normal',
+    icon: '🩹',
+    label: '通常施術',
     conditions: [
       { id: 'better', icon: '😊', label: '良くなっている' },
       { id: 'same',   icon: '😐', label: '変わらない'     },
       { id: 'worse',  icon: '😟', label: '悪化している'   },
     ]
   },
+  // 追加例:
+  // { id: 'initial', icon: '📋', label: '初診', conditions: [...] },
 ];
 
 // ============================================================
 // 状態
 // ============================================================
-let userId    = null;
-let isAdmin   = false;
-let viewMode  = 'week';
-let offset    = 0;
-let allSlots  = {};
-let selectedReservation = null;
-let adminFormData    = { name: '', menuId: '', conditionId: '' };
-let adminSelectedDate = null;
-let adminSelectedTime = null;
-let settingsClosedDays = [...CLOSED_DAYS];
+let weekOffset   = 0;
+let userId       = null;
+let slotsCache   = {};
+let selectedDate = null;
+let selectedTime = null;
+let activeBtn    = null; // 選択中のカレンダーセル
+let formData     = { name: '', menuId: '', conditionId: '' };
 
 // ============================================================
 // 初期化
 // ============================================================
 async function init() {
   try {
-    await liff.init({ liffId: LIFF_ID_ADMIN });
+    await liff.init({ liffId: LIFF_ID });
     if (liff.isLoggedIn()) {
       const p = await liff.getProfile();
       userId = p.userId;
     } else { liff.login(); return; }
-  } catch(e) { userId = 'TEST_ADMIN'; }
-
-  isAdmin = ADMIN_IDS.includes(userId);
-  if (!isAdmin) {
-    document.getElementById('mainContent').innerHTML = `
-      <div class="unauth">
-        <h2>⛔ アクセス権限がありません</h2>
-        <p>このページは管理者専用です。</p>
-      </div>`;
-    return;
-  }
-
-  // 設定シートから定休日を読み込む
+  } catch(e) { userId = 'TEST_USER'; }
+  // 設定シートから定休日と臨時休業日を読み込む
   try {
     const res  = await fetch(`${GAS_URL}?action=getSettings&userId=${userId}`);
     const data = await res.json();
     if (data.closed_days !== undefined) {
       CLOSED_DAYS = String(data.closed_days).split(',').map(Number).filter(n => !isNaN(n));
     }
+    if (data.holiday_dates) {
+      HOLIDAY_DATES = String(data.holiday_dates).split(',').map(s => s.trim()).filter(s => s);
+    }
   } catch(e) {}
 
-  await loadAndRender();
+  await loadWeek();
 }
 
-// ============================================================
-// ビュー切り替え・ナビ
-// ============================================================
-function switchView(mode) {
-  viewMode = mode; offset = 0;
-  document.getElementById('tabWeek').className = 'view-tab' + (mode==='week'?' active':'');
-  document.getElementById('tabDay').className  = 'view-tab' + (mode==='day' ?' active':'');
-  loadAndRender();
-}
-
-async function navigate(dir) {
-  offset += dir;
-  document.getElementById('btnPrev').disabled = (viewMode==='week' && offset<=0);
-  await loadAndRender();
+async function changeWeek(dir) {
+  weekOffset += dir;
+  document.getElementById('prevWeek').disabled = (weekOffset <= 0);
+  await loadWeek();
 }
 
 // ============================================================
 // データ取得
 // ============================================================
-async function loadAndRender() {
-  document.getElementById('mainContent').innerHTML =
+async function loadWeek() {
+  document.getElementById('calendarBody').innerHTML =
     '<div class="loading"><div class="spinner"></div> 読み込み中…</div>';
-  const dates = viewMode === 'week' ? getWeekDates(offset) : [getDayDate(offset)];
-  updateNavLabel(dates);
+  const dates = getWeekDates(weekOffset);
+  updateWeekLabel(dates);
   try {
-    const ds  = dates.map(d => formatDate(d));
-    const res = await fetch(`${GAS_URL}?action=adminGetSlots&dates=${ds.join(',')}&userId=${userId}`);
+    const ds = dates.map(d => formatDate(d));
+    const res = await fetch(`${GAS_URL}?action=getSlots&dates=${ds.join(',')}&userId=${userId}`);
     const data = await res.json();
-    allSlots = data.slots || {};
-  } catch(e) {
-    allSlots = generateDummySlots(dates);
-  }
-  viewMode === 'week' ? renderWeek(dates) : renderDay(dates[0]);
+    slotsCache = data.slots || {};
+  } catch(e) { slotsCache = generateDummySlots(getWeekDates(weekOffset)); }
+  renderCalendar(getWeekDates(weekOffset), slotsCache);
 }
 
-function getWeekDates(off) {
+function getWeekDates(offset) {
   const today = new Date();
   return Array.from({length:7}, (_,i) => {
-    const d = new Date(today); d.setDate(today.getDate() + off*7 + i); return d;
+    const d = new Date(today); d.setDate(today.getDate() + offset*7 + i); return d;
   });
 }
-function getDayDate(off) {
-  const d = new Date(); d.setDate(d.getDate() + off); return d;
-}
-function updateNavLabel(dates) {
-  const el = document.getElementById('navLabel');
-  if (viewMode === 'week') {
-    const s = dates[0], e = dates[6];
-    el.textContent = `${s.getMonth()+1}/${s.getDate()} 〜 ${e.getMonth()+1}/${e.getDate()}`;
-  } else {
-    const d = dates[0];
-    el.textContent = `${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）`;
-  }
-  document.getElementById('btnPrev').disabled = (viewMode==='week' && offset<=0);
+function updateWeekLabel(dates) {
+  const s = dates[0], e = dates[6];
+  document.getElementById('weekLabel').textContent =
+    `${s.getMonth()+1}/${s.getDate()} 〜 ${e.getMonth()+1}/${e.getDate()}`;
 }
 
 // ============================================================
-// 週ビュー描画
+// カレンダー描画
 // ============================================================
-function renderWeek(dates) {
-  const times = generateTimes();
-  const today = formatDate(new Date());
-  let html = `<div class="week-wrap"><table class="week-table"><thead><tr><th class="time-col">時刻</th>`;
+function renderCalendar(dates, slots) {
+  const slotList = generateTimeSlots();
+  const today    = formatDate(new Date());
+  let html = '<table><thead><tr><th class="time-col">時刻</th>';
   dates.forEach(d => {
     const ds  = formatDate(d);
-    const isHol = (allSlots[ds]?.[generateTimes()[0]] || []).some(r => r.status === 'holiday');
+    const isHol = HOLIDAY_DATES.includes(ds);
     const cls = (CLOSED_DAYS.includes(d.getDay()) || isHol) ? 'closed-col' : (ds===today ? 'today-col' : '');
     html += `<th class="${cls}"><span class="day-num">${d.getDate()}</span><span class="day-name">${DAY_NAMES[d.getDay()]}</span></th>`;
   });
   html += '</tr></thead><tbody>';
-  times.forEach(time => {
+  slotList.forEach(time => {
     html += `<tr><td class="time-cell">${time}</td>`;
     dates.forEach(d => {
-      const ds         = formatDate(d);
-      const isClosed   = CLOSED_DAYS.includes(d.getDay());
-      const isHoliday  = (allSlots[ds]?.[times[0]] || []).some(r => r.status === 'holiday');
-      const isToday    = ds === today;
-      const reservations = allSlots[ds]?.[time] || [];
-      const isBlocked  = reservations.some(r => r.status === 'blocked');
-      if (isClosed || isHoliday) {
-        html += `<td class="closed-cell"><div class="blocked-label" style="color:#888888">${isHoliday?'臨休':'休'}</div></td>`;
-      } else if (isBlocked) {
-        html += `<td class="blocked-cell"><div class="blocked-label">🔒</div></td>`;
-      } else if (reservations.length === 0) {
-        html += `<td class="empty-cell empty-clickable ${isToday?'today-bg':''}" onclick="openAdminBooking('${ds}','${time}')"></td>`;
+      const ds      = formatDate(d);
+      const isClosed  = CLOSED_DAYS.includes(d.getDay());
+      const isHoliday = HOLIDAY_DATES.includes(ds);
+      const isPast   = isPastSlot(d, time);
+      const isToday  = ds === today;
+      const isActive = (ds === selectedDate && time === selectedTime);
+      if (isClosed || isHoliday) { html += `<td class="slot-cell closed-day"><span class="closed-label">${isHoliday?'臨休':'休'}</span></td>`; return; }
+      const count     = (slots[ds]?.[time] ?? 0);
+      const remaining = MAX_PER_SLOT - count;
+      const tc = (isToday ? ' today-cell' : '') + (isActive ? ' selected-slot' : '');
+      if (isPast || remaining <= 0) {
+        html += `<td class="slot-cell${tc}"><button class="slot-btn ${isPast?'slot-closed':'slot-full'}" disabled>${isPast?'－':'×'}</button></td>`;
       } else {
-        const names   = reservations.map(r => r.name || '未入力');
-        const isMulti = reservations.length > 1;
-        if (isMulti) {
-          html += `<td class="${isToday?'today-bg':''}">
-            <div style="display:flex;flex-direction:column;height:100%">
-              <div class="booking-cell multi" style="flex:1" onclick="showMultiList('${ds}','${time}')">
-                <span class="booking-count" style="font-size:14px;font-weight:700">${reservations.length}名</span>
-              </div>
-              <div style="background:#1a9e8a;height:10px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="openAdminBooking('${ds}','${time}')">
-                <span style="color:#fff;font-size:9px">＋</span>
-              </div>
-            </div></td>`;
-        } else {
-          html += `<td class="${isToday?'today-bg':''}">
-            <div style="display:flex;flex-direction:column;height:100%">
-              <div class="booking-cell" style="flex:1" onclick="showDetail('${reservations[0].id}')">
-                <span class="booking-name">${names[0]}</span>
-              </div>
-              <div style="background:#1a9e8a;height:10px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="openAdminBooking('${ds}','${time}')">
-                <span style="color:#fff;font-size:9px">＋</span>
-              </div>
-            </div></td>`;
-        }
+        const ac = isActive ? ' active' : '';
+        html += `<td class="slot-cell${tc}" id="cell-${ds}-${time}">
+          <button class="slot-btn slot-open${ac}" onclick="selectSlot('${ds}','${time}',${remaining},this)">○</button>
+        </td>`;
       }
     });
     html += '</tr>';
   });
-  html += '</tbody></table></div>';
-  document.getElementById('mainContent').innerHTML = html;
+  html += '</tbody></table>';
+  document.getElementById('calendarBody').innerHTML = html;
+}
+
+function generateTimeSlots() {
+  return Array.from({length: DAY_END - DAY_START}, (_,i) =>
+    `${String(DAY_START+i).padStart(2,'0')}:00`);
+}
+function isPastSlot(date, time) {
+  const now = new Date();
+  const d = new Date(date); d.setHours(parseInt(time),0,0,0);
+  return d <= now;
 }
 
 // ============================================================
-// 日ビュー描画
+// 枠選択 → パネル表示
 // ============================================================
-function renderDay(date) {
-  const times     = generateTimes();
-  const ds        = formatDate(date);
-  const dateLabel = `${date.getMonth()+1}月${date.getDate()}日（${DAY_NAMES[date.getDay()]}）`;
-  let html = `<div class="day-wrap">
-    <div style="padding:4px 2px 8px;font-size:13px;font-weight:700;color:var(--sub)">${dateLabel}</div>
-    <div class="day-timeline">`;
-  times.forEach(time => {
-    const reservations = allSlots[ds]?.[time] || [];
-    const isBlocked    = reservations.some(r => r.status === 'blocked');
-    const isClosed     = CLOSED_DAYS.includes(date.getDay());
-    const isHoliday    = reservations.some(r => r.status === 'holiday');
-    if (isClosed || isHoliday) {
-      html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">${isHoliday?'🏖️ 臨時休業':'休業日'}</div></div>`;
-    } else if (isBlocked) {
-      html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">🔒 ブロック済み</div></div>`;
-    } else {
-      const cards = reservations.map(r => `
-        <div class="booking-card" onclick="showDetail('${r.id}')">
-          <span class="card-name">👤 ${r.name || '未入力'}</span>
-          <span class="card-menu">${getMenuLabel(r.menuId)} / ${getCondLabel(r.menuId, r.conditionId)}</span>
-        </div>`).join('');
-      html += `<div class="timeline-row">
-        <div class="tl-time">${time}</div>
-        <div class="tl-content">
-          ${reservations.length === 0
-            ? `<span class="tl-empty" style="cursor:pointer;color:var(--teal)" onclick="openAdminBooking('${ds}','${time}')">＋ 予約を追加</span>`
-            : cards + `<div style="cursor:pointer;color:var(--teal);font-size:12px;font-weight:700;padding:4px 8px;border:1.5px dashed var(--teal);border-radius:4px" onclick="openAdminBooking('${ds}','${time}')">＋ 追加</div>`
-          }
-        </div>
-      </div>`;
-    }
-  });
-  html += '</div></div>';
-  document.getElementById('mainContent').innerHTML = html;
-}
+function selectSlot(date, time, remaining, btn) {
+  // 以前の選択を解除
+  if (activeBtn && activeBtn !== btn) activeBtn.classList.remove('active');
+  activeBtn = btn;
+  btn.classList.add('active');
 
-// ============================================================
-// 詳細モーダル
-// ============================================================
-function showDetail(reservationId) {
-  let found = null;
-  Object.values(allSlots).forEach(timeMap => {
-    Object.values(timeMap).forEach(list => {
-      const r = list.find(r => r.id === reservationId);
-      if (r) found = r;
-    });
-  });
-  if (!found) return;
-  selectedReservation = found;
-  renderModal(found);
-  document.getElementById('modalOverlay').classList.add('open');
-}
+  selectedDate = date;
+  selectedTime = time;
+  formData.menuId = '';
+  formData.conditionId = '';
 
-function showMultiList(date, time) {
-  const reservations = allSlots[date]?.[time] || [];
-  if (reservations.length === 0) return;
-  const dateLabel = formatDateJapanese(new Date(date));
-  const endTime   = calcEndTime(time);
-  document.getElementById('detailGrid').innerHTML = `
-    <div class="detail-row"><span class="detail-key">📅 日付</span><span class="detail-val">${dateLabel}</span></div>
-    <div class="detail-row"><span class="detail-key">🕐 時間</span><span class="detail-val">${time}〜${endTime}</span></div>
-    <div class="detail-row" style="flex-direction:column;gap:8px">
-      <span class="detail-key" style="width:auto">👥 予約者一覧（${reservations.length}名）</span>
-      <div style="display:flex;flex-direction:column;gap:6px;width:100%">
-        ${reservations.map(r => `
-          <div onclick="showDetail('${r.id}')" style="display:flex;align-items:center;justify-content:space-between;background:#f0f8f6;border:1.5px solid var(--teal-light);border-radius:6px;padding:10px 12px;cursor:pointer;">
-            <div>
-              <div style="font-size:14px;font-weight:700">${r.name || '未入力'}</div>
-              <div style="font-size:12px;color:var(--sub);margin-top:2px">${getMenuLabel(r.menuId)} / ${getCondLabel(r.menuId, r.conditionId)}</div>
-            </div>
-            <span style="color:var(--teal);font-size:18px">›</span>
-          </div>`).join('')}
-      </div>
-    </div>`;
-  document.getElementById('modalActions').innerHTML = '';
-  document.getElementById('modalOverlay').classList.add('open');
-}
-
-function renderModal(r) {
-  const dateLabel = formatDateJapanese(new Date(r.date));
-  document.getElementById('detailGrid').innerHTML = `
-    <div class="detail-row"><span class="detail-key">📅 日付</span><span class="detail-val">${dateLabel}</span></div>
-    <div class="detail-row"><span class="detail-key">🕐 時間</span><span class="detail-val">${r.time}〜${calcEndTime(r.time)}</span></div>
-    <div class="detail-row"><span class="detail-key">👤 氏名</span><span class="detail-val">${r.name || '未入力'}</span></div>
-    <div class="detail-row"><span class="detail-key">🩹 施術</span><span class="detail-val">${getMenuLabel(r.menuId)}</span></div>
-    <div class="detail-row"><span class="detail-key">💬 症状</span><span class="detail-val">${getCondLabel(r.menuId, r.conditionId)}</span></div>
-    <div class="detail-row"><span class="detail-key">状態</span><span class="detail-val"><span class="badge badge-confirmed">✅ 確定</span></span></div>
-    <div class="detail-row"><span class="detail-key">🔖 予約ID</span><span class="detail-val" style="font-size:11px;color:var(--sub)">${r.id}</span></div>`;
-  document.getElementById('modalActions').innerHTML = `
-    <button class="btn-cancel-booking" onclick="cancelFromAdmin('${r.id}')">❌ この予約をキャンセルする</button>`;
-}
-
-function closeModal(e)     { if (e.target === document.getElementById('modalOverlay')) closeModalDirect(); }
-function closeModalDirect(){ document.getElementById('modalOverlay').classList.remove('open'); }
-
-// ============================================================
-// 管理者キャンセル
-// ============================================================
-async function cancelFromAdmin(reservationId) {
-  if (!confirm('この予約をキャンセルしますか？\n（患者さんへのLINE通知も送られます）')) return;
-  try {
-    const params = new URLSearchParams({ action: 'adminCancel', userId, reservationId });
-    await fetch(`${GAS_URL}?${params.toString()}`, { mode: 'no-cors' });
-    await new Promise(r => setTimeout(r, 1500));
-    closeModalDirect();
-    showToast('✅ キャンセルしました');
-    await loadAndRender();
-  } catch(e) {
-    showToast('⚠️ キャンセルに失敗しました');
-  }
-}
-
-// ============================================================
-// 管理者予約入力
-// ============================================================
-function openAdminBooking(date, time) {
-  adminSelectedDate = date;
-  adminSelectedTime = time;
-  adminFormData = { name: '', menuId: '', conditionId: '' };
-  document.getElementById('adminInputName').value = '';
-  document.getElementById('adminConditionArea').style.display = 'none';
   const d = new Date(date);
-  document.getElementById('adminPanelBadge').textContent =
+  document.getElementById('selectedBadge').textContent =
     `📅 ${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}） 　🕐 ${time}〜${calcEndTime(time)}`;
-  renderAdminMenuBtns();
-  validateAdminForm();
-  document.getElementById('adminBookingPanel').classList.add('open');
+
+  renderMenuBtns();
+  document.getElementById('conditionArea').style.display = 'none';
+  document.getElementById('inputName').value = formData.name; // 名前は保持
+  validateForm();
+  document.getElementById('bookingPanel').classList.add('open');
 }
 
-function closeAdminPanel() { document.getElementById('adminBookingPanel').classList.remove('open'); }
+function closePanel() {
+  document.getElementById('bookingPanel').classList.remove('open');
+  if (activeBtn) { activeBtn.classList.remove('active'); activeBtn = null; }
+  selectedDate = null; selectedTime = null;
+}
 
-function renderAdminMenuBtns() {
-  document.getElementById('adminMenuBtns').innerHTML = ADMIN_MENUS.map(m => `
-    <button class="sel-btn-admin ${adminFormData.menuId===m.id?'selected':''}" onclick="selectAdminMenu('${m.id}')">
+// ============================================================
+// メニューボタン描画
+// ============================================================
+function renderMenuBtns() {
+  document.getElementById('menuBtns').innerHTML = MENUS.map(m => `
+    <button class="sel-btn ${formData.menuId===m.id?'selected':''}" onclick="selectMenu('${m.id}')">
       <span class="sb-icon">${m.icon}</span>
       <span class="sb-label">${m.label}</span>
-    </button>`).join('');
+    </button>
+  `).join('');
 }
 
-function selectAdminMenu(id) {
-  adminFormData.menuId = id; adminFormData.conditionId = '';
-  renderAdminMenuBtns(); renderAdminConditionBtns();
-  document.getElementById('adminConditionArea').style.display = '';
-  validateAdminForm();
+function selectMenu(id) {
+  formData.menuId = id;
+  formData.conditionId = '';
+  renderMenuBtns();
+  renderConditionBtns();
+  document.getElementById('conditionArea').style.display = '';
+  validateForm();
 }
 
-function renderAdminConditionBtns() {
-  const menu = ADMIN_MENUS.find(m => m.id === adminFormData.menuId);
+// ============================================================
+// 症状ボタン描画
+// ============================================================
+function renderConditionBtns() {
+  const menu = MENUS.find(m => m.id === formData.menuId);
   if (!menu) return;
-  document.getElementById('adminConditionBtns').innerHTML = menu.conditions.map(c => `
-    <button class="sel-btn-admin ${adminFormData.conditionId===c.id?'selected':''}" onclick="selectAdminCondition('${c.id}')">
+  document.getElementById('conditionBtns').innerHTML = menu.conditions.map(c => `
+    <button class="sel-btn ${formData.conditionId===c.id?'selected':''}" onclick="selectCondition('${c.id}')">
       <span class="sb-icon">${c.icon}</span>
       <span class="sb-label">${c.label}</span>
-    </button>`).join('');
+    </button>
+  `).join('');
 }
 
-function selectAdminCondition(id) {
-  adminFormData.conditionId = id; renderAdminConditionBtns(); validateAdminForm();
+function selectCondition(id) {
+  formData.conditionId = id;
+  renderConditionBtns();
+  validateForm();
 }
 
-function validateAdminForm() {
-  adminFormData.name = document.getElementById('adminInputName').value.trim();
-  document.getElementById('btnAdminBook').disabled = !(adminFormData.name && adminFormData.menuId && adminFormData.conditionId);
+// ============================================================
+// バリデーション
+// ============================================================
+function validateForm() {
+  formData.name = document.getElementById('inputName').value.trim();
+  const ok = formData.name && formData.menuId && formData.conditionId;
+  document.getElementById('btnBook').disabled = !ok;
 }
 
-async function submitAdminBooking() {
-  const btn = document.getElementById('btnAdminBook');
+// ============================================================
+// 予約送信
+// ============================================================
+async function submitBooking() {
+  const btn = document.getElementById('btnBook');
   btn.disabled = true; btn.textContent = '送信中…';
   try {
-    const params = new URLSearchParams({
-      action: 'adminBook', userId,
-      date: adminSelectedDate, time: adminSelectedTime,
-      name: adminFormData.name, menuId: adminFormData.menuId, conditionId: adminFormData.conditionId,
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'book', userId,
+        date: selectedDate, time: selectedTime,
+        name: formData.name, menuId: formData.menuId, conditionId: formData.conditionId,
+      })
     });
-    await fetch(`${GAS_URL}?${params.toString()}`, { mode: 'no-cors' });
-    await new Promise(r => setTimeout(r, 2000));
-    closeAdminPanel();
-    showToast(`✅ ${adminFormData.name} 様の予約を追加しました`);
-    await loadAndRender();
-  } catch(e) {
-    showToast('通信エラーが発生しました');
-  }
-  btn.disabled = false; btn.textContent = '予約を追加する';
-}
-
-// ============================================================
-// 設定パネル
-// ============================================================
-async function openSettings() {
-  try {
-    const res  = await fetch(`${GAS_URL}?action=getSettings&userId=${userId}`);
     const data = await res.json();
-    if (data.closed_days !== undefined) {
-      settingsClosedDays = String(data.closed_days).split(',').map(Number).filter(n => !isNaN(n));
+    if (data.success) {
+      closePanel();
+      showDone(data.reservation);
+      await loadWeek();
     } else {
-      settingsClosedDays = [...CLOSED_DAYS];
+      showToast(data.message || '予約に失敗しました');
+      btn.disabled = false; btn.textContent = '予約を確定する';
     }
   } catch(e) {
-    settingsClosedDays = [...CLOSED_DAYS];
+    // テスト用
+    closePanel();
+    showDone({ id: 'R_TEST001', date: selectedDate, time: selectedTime });
+    btn.disabled = false; btn.textContent = '予約を確定する';
   }
-  renderClosedDayBtns();
-  document.getElementById('settingsOverlay').classList.add('open');
 }
 
-function renderClosedDayBtns() {
-  document.getElementById('closedDayBtns').innerHTML = DAY_NAMES.map((d, i) => `
-    <button onclick="toggleClosedDay(${i})" style="
-      padding:10px 16px;border-radius:8px;border:2px solid var(--teal);
-      font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);
-      background:${settingsClosedDays.includes(i) ? 'var(--teal)' : '#fff'};
-      color:${settingsClosedDays.includes(i) ? '#fff' : 'var(--teal)'};
-    ">${d}</button>`).join('');
+// ============================================================
+// 完了画面
+// ============================================================
+function showDone(r) {
+  const d    = new Date(r.date);
+  const menu = MENUS.find(m => m.id === formData.menuId);
+  const cond = menu?.conditions.find(c => c.id === formData.conditionId);
+  document.getElementById('doneDetail').innerHTML = `
+    <p>📅 <span>${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）</span></p>
+    <p>🕐 <span>${r.time}〜${calcEndTime(r.time)}</span></p>
+    <p>👤 <span>${formData.name} 様</span></p>
+    <p>🩹 <span>${menu?.label}</span></p>
+    <p>💬 <span>${cond?.label}</span></p>
+    <p>🔖 <span>${r.id}</span></p>
+  `;
+  document.getElementById('doneScreen').classList.add('open');
 }
 
-function toggleClosedDay(day) {
-  if (settingsClosedDays.includes(day)) {
-    settingsClosedDays = settingsClosedDays.filter(d => d !== day);
-  } else {
-    settingsClosedDays.push(day); settingsClosedDays.sort();
-  }
-  renderClosedDayBtns();
+function closeDone() {
+  document.getElementById('doneScreen').classList.remove('open');
+  if (typeof liff !== 'undefined' && liff.isInClient()) liff.closeWindow();
 }
-
-async function saveSettingsFromUI() {
-  const btn = document.getElementById('btnSaveSettings');
-  btn.textContent = '保存中…'; btn.disabled = true;
-  try {
-    const params = new URLSearchParams({
-      action: 'saveSetting', userId,
-      key: 'closed_days',
-      value: settingsClosedDays.join(','),
-    });
-    await fetch(`${GAS_URL}?${params.toString()}`, { mode: 'no-cors' });
-    await new Promise(r => setTimeout(r, 1000));
-    CLOSED_DAYS = [...settingsClosedDays];
-    closeSettingsDirect();
-    showToast('✅ 設定を保存しました');
-    await loadAndRender();
-  } catch(e) {
-    showToast('⚠️ 保存に失敗しました');
-  }
-  btn.textContent = '保存する'; btn.disabled = false;
-}
-
-function closeSettings(e)     { if (e.target === document.getElementById('settingsOverlay')) closeSettingsDirect(); }
-function closeSettingsDirect(){ document.getElementById('settingsOverlay').classList.remove('open'); }
 
 // ============================================================
 // ユーティリティ
 // ============================================================
-function generateTimes() {
-  return Array.from({length: DAY_END - DAY_START}, (_,i) =>
-    `${String(DAY_START+i).padStart(2,'0')}:00`);
-}
 function formatDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
@@ -667,30 +574,18 @@ function calcEndTime(time) {
   const t = h*60+m+SLOT_MIN;
   return `${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`;
 }
-function formatDateJapanese(d) {
-  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）`;
-}
-function getMenuLabel(id)           { return MENU_LABELS[id] || id || '－'; }
-function getCondLabel(menuId, condId){ return COND_LABELS[menuId]?.[condId] || condId || '－'; }
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
+  setTimeout(() => t.classList.remove('show'), 3000);
 }
 function generateDummySlots(dates) {
-  const result = {};
-  const names  = ['山田太郎','田中花子','佐藤次郎','鈴木美咲'];
+  const r = {};
   dates.forEach(d => {
-    const ds = formatDate(d); result[ds] = {};
-    generateTimes().forEach((t,i) => {
-      result[ds][t] = Math.random() > 0.65 ? [{
-        id: `R_DUMMY_${ds}_${t}`, date: ds, time: t,
-        name: names[i % names.length], menuId: 'normal',
-        conditionId: ['better','same','worse'][i%3], status: 'confirmed'
-      }] : [];
-    });
+    const ds = formatDate(d); r[ds] = {};
+    generateTimeSlots().forEach(t => { r[ds][t] = Math.floor(Math.random()*6); });
   });
-  return result;
+  return r;
 }
 
 init();
