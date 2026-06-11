@@ -688,15 +688,16 @@ async function submitAdminBooking() {
   const btn = document.getElementById('btnAdminBook');
   btn.disabled = true; btn.textContent = '送信中…';
   try {
-    const res = await fetch(GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'adminBook', userId,
-        date: adminSelectedDate, time: adminSelectedTime,
-        name: adminFormData.name, menuId: adminFormData.menuId, conditionId: adminFormData.conditionId,
-      })
+    const params = new URLSearchParams({
+      action: 'adminBook',
+      userId,
+      date: adminSelectedDate,
+      time: adminSelectedTime,
+      name: adminFormData.name,
+      menuId: adminFormData.menuId,
+      conditionId: adminFormData.conditionId,
     });
+    const res = await fetch(`${GAS_URL}?${params.toString()}`);
     const data = await res.json();
     if (data.success) {
       closeAdminPanel();
@@ -707,9 +708,7 @@ async function submitAdminBooking() {
       btn.disabled = false; btn.textContent = '予約を追加する';
     }
   } catch(e) {
-    closeAdminPanel();
-    showToast('✅ 予約を追加しました（テスト）');
-    await loadAndRender();
+    showToast('通信エラーが発生しました: ' + e.message);
     btn.disabled = false; btn.textContent = '予約を追加する';
   }
 }
