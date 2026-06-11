@@ -416,7 +416,7 @@ function renderCalendar(dates, slots) {
       const isPast   = isPastSlot(d, time);
       const isToday  = ds === today;
       const isActive = (ds === selectedDate && time === selectedTime);
-      if (isClosed || isHoliday) { html += `<td class="slot-cell closed-day"><span class="closed-label">${isHoliday?'臨休':'休'}</span></td>`; return; }
+      if (isClosed || isHoliday) { html += `<td class="slot-cell closed-day"><span class="closed-label">${'休'}</span></td>`; return; }
       const count     = (slots[ds]?.[time] ?? 0);
       const remaining = MAX_PER_SLOT - count;
       const tc = (isToday ? ' today-cell' : '') + (isActive ? ' selected-slot' : '');
@@ -580,6 +580,7 @@ async function submitBooking() {
   const btn = document.getElementById('btnBook');
   btn.disabled = true; btn.textContent = '送信中…';
   try {
+    // 送信直前に最新の入力値を取得
     const latestNames = getNameValues();
     const params = new URLSearchParams({
       action: 'book', userId,
@@ -587,14 +588,10 @@ async function submitBooking() {
       names: latestNames.join(','), menuId: formData.menuId, conditionId: formData.conditionId,
     });
     await fetch(`${GAS_URL}?${params.toString()}`, { mode: 'no-cors' });
+    // no-corsではレスポンスが読めないので2秒待ってからリロード
     await new Promise(resolve => setTimeout(resolve, 2000));
-    // selectedDate・selectedTimeを直接渡す
-    const savedDate  = selectedDate;
-    const savedTime  = selectedTime;
-    const savedNames = [...latestNames];
     closePanel();
-    formData.names = savedNames;
-    showDone({ date: savedDate, time: savedTime });
+    showDone({ id: '予約完了', date: selectedDate, time: selectedTime });
     await loadWeek();
   } catch(e) {
     showToast('通信エラーが発生しました: ' + e.message);
