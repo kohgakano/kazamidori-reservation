@@ -499,15 +499,16 @@ async function submitBooking() {
   const btn = document.getElementById('btnBook');
   btn.disabled = true; btn.textContent = '送信中…';
   try {
-    const res = await fetch(GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'book', userId,
-        date: selectedDate, time: selectedTime,
-        name: formData.name, menuId: formData.menuId, conditionId: formData.conditionId,
-      })
+    const params = new URLSearchParams({
+      action: 'book',
+      userId,
+      date: selectedDate,
+      time: selectedTime,
+      name: formData.name,
+      menuId: formData.menuId,
+      conditionId: formData.conditionId,
     });
+    const res = await fetch(`${GAS_URL}?${params.toString()}`);
     const data = await res.json();
     if (data.success) {
       closePanel();
@@ -518,9 +519,7 @@ async function submitBooking() {
       btn.disabled = false; btn.textContent = '予約を確定する';
     }
   } catch(e) {
-    // テスト用
-    closePanel();
-    showDone({ id: 'R_TEST001', date: selectedDate, time: selectedTime });
+    showToast('通信エラーが発生しました: ' + e.message);
     btn.disabled = false; btn.textContent = '予約を確定する';
   }
 }
