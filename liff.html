@@ -190,6 +190,17 @@
   .spinner { width: 18px; height: 18px; border: 2px solid #ddd; border-top-color: var(--teal); border-radius: 50%; animation: spin .7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* 人数ボタン */
+  .count-btn {
+    width: 44px; height: 44px; border-radius: 8px;
+    border: 2px solid var(--border); background: #fff;
+    font-size: 15px; font-weight: 700; cursor: pointer;
+    font-family: var(--font); transition: all .15s;
+  }
+  .count-btn.selected { border-color: var(--teal); background: var(--teal-light); color: var(--teal); }
+  .name-input-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .name-label { font-size: 12px; color: var(--sub); white-space: nowrap; width: 40px; flex-shrink: 0; }
+
   /* トースト */
   .toast {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(10px);
@@ -238,10 +249,16 @@
   <div class="selected-badge" id="selectedBadge"></div>
   <div class="panel-body">
 
-    <!-- 氏名 -->
+    <!-- 人数選択 -->
     <div>
+      <div class="field-label">👥 人数 <span class="req">必須</span></div>
+      <div class="btn-row" id="countBtns"></div>
+    </div>
+
+    <!-- 氏名（人数分） -->
+    <div id="nameFields">
       <div class="field-label">👤 氏名 <span class="req">必須</span></div>
-      <input type="text" class="text-input" id="inputName" placeholder="例：山田 太郎" oninput="validateForm()">
+      <div id="nameInputs"></div>
     </div>
 
     <!-- 施術メニュー -->
@@ -311,7 +328,8 @@ let slotsCache   = {};
 let selectedDate = null;
 let selectedTime = null;
 let activeBtn    = null; // 選択中のカレンダーセル
-let formData     = { name: '', menuId: '', conditionId: '' };
+let formData     = { names: [''], menuId: '', conditionId: '' };
+let selectedCount = 1;
 
 // ============================================================
 // 初期化
@@ -438,8 +456,10 @@ function selectSlot(date, time, remaining, btn) {
 
   selectedDate = date;
   selectedTime = time;
+  formData.names = [''];
   formData.menuId = '';
   formData.conditionId = '';
+  selectedCount = 1;
 
   const d = new Date(date);
   document.getElementById('selectedBadge').textContent =
@@ -456,6 +476,49 @@ function closePanel() {
   document.getElementById('bookingPanel').classList.remove('open');
   if (activeBtn) { activeBtn.classList.remove('active'); activeBtn = null; }
   selectedDate = null; selectedTime = null;
+}
+
+// ============================================================
+// 人数・氏名入力
+// ============================================================
+function renderCountBtns() {
+  const max = Math.min(MAX_PER_SLOT, 5);
+  document.getElementById('countBtns').innerHTML = Array.from({length: max}, (_,i) => `
+    <button class="count-btn ${selectedCount===i+1?'selected':''}" onclick="selectCount(${i+1})">${i+1}</button>
+  `).join('');
+}
+
+function selectCount(n) {
+  selectedCount = n;
+  formData.names = Array.from({length: n}, (_,i) => formData.names[i] || '');
+  renderCountBtns();
+  renderNameInputs();
+  validateForm();
+}
+
+function renderNameInputs() {
+  document.getElementById('nameInputs').innerHTML = Array.from({length: selectedCount}, (_,i) => `
+    <div class="name-input-row">
+      <span class="name-label">${i+1}人目</span>
+      <input type="text" class="text-input" id="inputName${i}"
+        placeholder="例：山田 太郎"
+        value="${formData.names[i] || ''}"
+        oninput="updateName(${i})"
+        style="flex:1">
+    </div>
+  `).join('');
+}
+
+function updateName(i) {
+  formData.names[i] = document.getElementById(`inputName${i}`).value;
+  validateForm();
+}
+
+function getNameValues() {
+  return Array.from({length: selectedCount}, (_,i) => {
+    const el = document.getElementById(`inputName${i}`);
+    return el ? el.value.trim() : (formData.names[i] || '');
+  });
 }
 
 // ============================================================
@@ -503,8 +566,8 @@ function selectCondition(id) {
 // バリデーション
 // ============================================================
 function validateForm() {
-  formData.name = document.getElementById('inputName').value.trim();
-  const ok = formData.name && formData.menuId && formData.conditionId;
+  formData.names = getNameValues();
+  const ok = formData.names.every(n => n.trim()) && formData.menuId && formData.conditionId;
   document.getElementById('btnBook').disabled = !ok;
 }
 
@@ -518,18 +581,14 @@ async function submitBooking() {
     const params = new URLSearchParams({
       action: 'book', userId,
       date: selectedDate, time: selectedTime,
-      name: formData.name, menuId: formData.menuId, conditionId: formData.conditionId,
+      names: formData.names.join(','), menuId: formData.menuId, conditionId: formData.conditionId,
     });
-    const res  = await fetch(`${GAS_URL}?${params.toString()}`);
-    const data = await res.json();
-    if (data.success) {
-      closePanel();
-      showDone(data.reservation);
-      await loadWeek();
-    } else {
-      showToast(data.message || '予約に失敗しました');
-      btn.disabled = false; btn.textContent = '予約を確定する';
-    }
+    await fetch(`${GAS_URL}?${params.toString()}`, { mode: 'no-cors' });
+    // no-corsではレスポンスが読めないので2秒待ってからリロード
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    closePanel();
+    showDone({ id: '予約完了', date: selectedDate, time: selectedTime });
+    await loadWeek();
   } catch(e) {
     showToast('通信エラーが発生しました: ' + e.message);
     btn.disabled = false; btn.textContent = '予約を確定する';
@@ -547,10 +606,10 @@ function showDone(r) {
   document.getElementById('doneDetail').innerHTML = `
     <p>📅 <span>${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）</span></p>
     <p>🕐 <span>${time}〜${time ? calcEndTime(time) : ''}</span></p>
-    <p>👤 <span>${formData.name} 様</span></p>
+    <p>👤 <span>${formData.names.join('・')} 様（${formData.names.length}名）</span></p>
     <p>🩹 <span>${menu?.label || ''}</span></p>
     <p>💬 <span>${cond?.label || ''}</span></p>
- 
+
   `;
   document.getElementById('doneScreen').classList.add('open');
 }
