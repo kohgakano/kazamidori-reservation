@@ -129,17 +129,21 @@
 </head>
 <body>
 
-<header>
-  <h1>⚙️ 管理カレンダー</h1>
-  <div class="header-right">
-    <button class="nav-btn" onclick="openSettings()">設定</button>
-    <div class="view-tabs">
-      <button class="view-tab active" id="tabWeek" onclick="switchView('week')">週</button>
-      <button class="view-tab" id="tabDay" onclick="switchView('day')">日</button>
+<header style="flex-direction:column;gap:8px;padding:8px 14px">
+  <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+    <h1>⚙️ 管理カレンダー</h1>
+    <div style="display:flex;align-items:center;gap:6px">
+      <button class="nav-btn" onclick="openSettings()">⚙️ 設定</button>
+      <div class="view-tabs">
+        <button class="view-tab active" id="tabWeek" onclick="switchView('week')">週</button>
+        <button class="view-tab" id="tabDay" onclick="switchView('day')">日</button>
+      </div>
     </div>
-    <button class="nav-btn" id="btnPrev" onclick="navigate(-1)">‹</button>
-    <span class="nav-label" id="navLabel"></span>
-    <button class="nav-btn" id="btnNext" onclick="navigate(1)">›</button>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%">
+    <button class="nav-btn" id="btnPrev" onclick="navigate(-1)">‹ 前</button>
+    <span class="nav-label" id="navLabel" style="min-width:140px;text-align:center"></span>
+    <button class="nav-btn" id="btnNext" onclick="navigate(1)">次 ›</button>
   </div>
 </header>
 
