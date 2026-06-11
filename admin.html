@@ -323,8 +323,11 @@ async function loadAndRender() {
     const ds  = dates.map(d => formatDate(d));
     const res = await fetch(`${GAS_URL}?action=adminGetSlots&dates=${ds.join(',')}&userId=${userId}`);
     const data = await res.json();
+    console.log('取得データ:', JSON.stringify(data).substring(0, 200)); // ← 追加
     allSlots = data.slots || {};
+    console.log('allSlots keys:', Object.keys(allSlots)); // ← 追加
   } catch(e) {
+    console.error('データ取得エラー:', e.message); // ← 追加
     allSlots = generateDummySlots(dates);
   }
 
