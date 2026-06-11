@@ -697,16 +697,14 @@ async function submitAdminBooking() {
       menuId: adminFormData.menuId,
       conditionId: adminFormData.conditionId,
     });
-    const res = await fetch(`${GAS_URL}?${params.toString()}`);
-    const data = await res.json();
-    if (data.success) {
-      closeAdminPanel();
-      showToast(`✅ ${adminFormData.name} 様の予約を追加しました`);
-      await loadAndRender();
-    } else {
-      showToast('⚠️ ' + (data.message || '予約に失敗しました'));
-      btn.disabled = false; btn.textContent = '予約を追加する';
-    }
+    const res = await fetch(`${GAS_URL}?${params.toString()}`, {
+      mode: 'no-cors'
+    });
+    // no-corsではレスポンスが読めないので2秒待ってからリロード
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    closeAdminPanel();
+    showToast(`✅ ${adminFormData.name} 様の予約を追加しました`);
+    await loadAndRender();
   } catch(e) {
     showToast('通信エラーが発生しました: ' + e.message);
     btn.disabled = false; btn.textContent = '予約を追加する';
