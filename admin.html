@@ -22,12 +22,7 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: var(--font); background: #f0f4f3; color: var(--text); font-size: 13px; }
 
-  header {
-    background: var(--teal); color: #fff;
-    padding: 10px 14px;
-    display: flex; align-items: center; justify-content: space-between;
-    position: sticky; top: 0; z-index: 100; gap: 8px;
-  }
+  header { background: var(--teal); color: #fff; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; gap: 8px; }
   header h1 { font-size: 14px; font-weight: 700; white-space: nowrap; }
   .header-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
   .view-tabs { display: flex; background: rgba(0,0,0,.2); border-radius: 6px; overflow: hidden; }
@@ -41,7 +36,6 @@
   .spinner { width: 18px; height: 18px; border: 2px solid #ddd; border-top-color: var(--teal); border-radius: 50%; animation: spin .7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* 週ビュー */
   .week-wrap { overflow-x: auto; padding: 10px; }
   .week-table { border-collapse: collapse; background: #fff; border-radius: var(--radius); overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); min-width: 100%; }
   .week-table th { background: var(--teal); color: #fff; padding: 6px 4px; text-align: center; font-size: 11px; border-right: 1px solid rgba(255,255,255,.15); white-space: nowrap; }
@@ -65,7 +59,6 @@
   .empty-clickable { cursor: pointer; transition: background .15s; }
   .empty-clickable:hover { background: #d4ede9 !important; }
 
-  /* 日ビュー */
   .day-wrap { padding: 10px; }
   .day-timeline { background: #fff; border-radius: var(--radius); box-shadow: 0 1px 4px rgba(0,0,0,.08); overflow: hidden; }
   .timeline-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); min-height: 44px; }
@@ -81,7 +74,6 @@
   .booking-card .card-name { font-size: 13px; font-weight: 700; }
   .booking-card .card-menu { font-size: 11px; opacity: .85; }
 
-  /* モーダル共通 */
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200; align-items: flex-end; justify-content: center; }
   .modal-overlay.open { display: flex; }
   .modal { background: #fff; border-radius: 16px 16px 0 0; width: 100%; max-width: 480px; padding: 24px 20px 36px; animation: slideUp .2s ease; max-height: 90vh; overflow-y: auto; }
@@ -97,7 +89,6 @@
   .modal-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
   .btn-cancel-booking { background: #fdf0f0; color: #c0392b; border: 1.5px solid #e8c0c0; border-radius: var(--radius); padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--font); }
 
-  /* 管理者予約入力パネル */
   .admin-booking-panel { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-radius: 16px 16px 0 0; box-shadow: 0 -4px 20px rgba(0,0,0,.15); transform: translateY(100%); transition: transform .3s ease; z-index: 300; max-width: 480px; margin: 0 auto; }
   .admin-booking-panel.open { transform: translateY(0); }
   .panel-handle { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 8px; border-bottom: 1px solid #f0f0f0; }
@@ -117,11 +108,9 @@
   .btn-admin-book { width: 100%; background: var(--teal); color: #fff; border: none; border-radius: var(--radius); padding: 14px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: var(--font); }
   .btn-admin-book:disabled { background: #aaaaaa; cursor: default; }
 
-  /* トースト */
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(10px); background: #333333; color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 13px; opacity: 0; transition: all .3s; z-index: 500; white-space: nowrap; pointer-events: none; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  /* 未認証 */
   .unauth { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; gap: 12px; padding: 32px; text-align: center; }
   .unauth h2 { font-size: 18px; color: #c0392b; }
   .unauth p { color: var(--sub); font-size: 14px; line-height: 1.7; }
@@ -208,23 +197,19 @@
 <div class="toast" id="toast"></div>
 
 <script>
-// ============================================================
-// 設定
-// ============================================================
 const GAS_URL     = 'https://script.google.com/macros/s/AKfycbw-JsEZlCOe6FeItSrj18jK2hOx84rRzSBqpLId6eyDH5--pgEkxJiPWsx09ln82wMf/exec';
 const LIFF_ID_ADMIN = '2010369051-2a4AtkBu'; // 管理者用LIFFのID（別途作成）
 const ADMIN_IDS   = ['U715fc71e2b7b3501161496aa934c0419','Ufaa1a7d88eb066170c59db13ccaeff2c',]; // Admin.gsと同じIDを入れる
 const SLOT_MIN      = 60;
 const DAY_START     = 9;
 const DAY_END       = 24;
-let   CLOSED_DAYS   = []; // 設定シートから動的に読み込む
+let   CLOSED_DAYS   = [];
 const DAY_NAMES     = ['日','月','火','水','木','金','土'];
 
 const MENU_LABELS = { normal: '通常施術' };
 const COND_LABELS = {
   normal: { better: '😊 良くなっている', same: '😐 変わらない', worse: '😟 悪化している' }
 };
-
 const ADMIN_MENUS = [
   {
     id: 'normal', icon: '🩹', label: '通常施術',
@@ -236,23 +221,16 @@ const ADMIN_MENUS = [
   },
 ];
 
-// ============================================================
-// 状態
-// ============================================================
 let userId    = null;
 let isAdmin   = false;
 let viewMode  = 'week';
 let offset    = 0;
 let allSlots  = {};
-let selectedReservation = null;
-let adminFormData    = { name: '', menuId: '', conditionId: '' };
+let adminFormData     = { name: '', menuId: '', conditionId: '' };
 let adminSelectedDate = null;
 let adminSelectedTime = null;
-let settingsClosedDays = [...CLOSED_DAYS];
+let settingsClosedDays = [];
 
-// ============================================================
-// 初期化
-// ============================================================
 async function init() {
   try {
     await liff.init({ liffId: LIFF_ID_ADMIN });
@@ -272,7 +250,6 @@ async function init() {
     return;
   }
 
-  // 設定シートから定休日を読み込む
   try {
     const res  = await fetch(`${GAS_URL}?action=getSettings&userId=${userId}`);
     const data = await res.json();
@@ -285,9 +262,6 @@ async function init() {
   await loadAndRender();
 }
 
-// ============================================================
-// ビュー切り替え・ナビ
-// ============================================================
 function switchView(mode) {
   viewMode = mode; offset = 0;
   document.getElementById('tabWeek').className = 'view-tab' + (mode==='week'?' active':'');
@@ -301,9 +275,6 @@ async function navigate(dir) {
   await loadAndRender();
 }
 
-// ============================================================
-// データ取得
-// ============================================================
 async function loadAndRender() {
   document.getElementById('mainContent').innerHTML =
     '<div class="loading"><div class="spinner"></div> 読み込み中…</div>';
@@ -341,32 +312,30 @@ function updateNavLabel(dates) {
   document.getElementById('btnPrev').disabled = (viewMode==='week' && offset<=0);
 }
 
-// ============================================================
-// 週ビュー描画
-// ============================================================
 function renderWeek(dates) {
   const times = generateTimes();
   const today = formatDate(new Date());
   let html = `<div class="week-wrap"><table class="week-table"><thead><tr><th class="time-col">時刻</th>`;
   dates.forEach(d => {
-    const ds  = formatDate(d);
-    const isHol = (allSlots[ds]?.[generateTimes()[0]] || []).some(r => r.status === 'holiday');
-    const cls = (CLOSED_DAYS.includes(d.getDay()) || isHol) ? 'closed-col' : (ds===today ? 'today-col' : '');
+    const ds    = formatDate(d);
+    const isHol = (allSlots[ds]?.[times[0]] || []).some(r => r.status === 'holiday');
+    const cls   = (CLOSED_DAYS.includes(d.getDay()) || isHol) ? 'closed-col' : (ds===today ? 'today-col' : '');
     html += `<th class="${cls}"><span class="day-num">${d.getDate()}</span><span class="day-name">${DAY_NAMES[d.getDay()]}</span></th>`;
   });
   html += '</tr></thead><tbody>';
   times.forEach(time => {
     html += `<tr><td class="time-cell">${time}</td>`;
     dates.forEach(d => {
-      const ds         = formatDate(d);
-      const isClosed   = CLOSED_DAYS.includes(d.getDay());
-      const isHoliday  = (allSlots[ds]?.[times[0]] || []).some(r => r.status === 'holiday');
-      const isToday    = ds === today;
+      const ds           = formatDate(d);
+      const isClosed     = CLOSED_DAYS.includes(d.getDay());
+      const isToday      = ds === today;
       const reservations = allSlots[ds]?.[time] || [];
-      const isBlocked  = reservations.some(r => r.status === 'blocked');
-      const isClosed2  = reservations.some(r => r.status === 'closed');
+      const isHoliday    = reservations.some(r => r.status === 'holiday');
+      const isBlocked    = reservations.some(r => r.status === 'blocked');
+      const isClosed2    = reservations.some(r => r.status === 'closed');
+
       if (isClosed || isHoliday) {
-        html += `<td class="closed-cell"><div class="blocked-label" style="color:#888888">${'休'}</div></td>`;
+        html += `<td class="closed-cell"><div class="blocked-label" style="color:#888888">休</div></td>`;
       } else if (isBlocked) {
         html += `<td class="blocked-cell"><div class="blocked-label">🔒</div></td>`;
       } else if (isClosed2) {
@@ -405,9 +374,6 @@ function renderWeek(dates) {
   document.getElementById('mainContent').innerHTML = html;
 }
 
-// ============================================================
-// 日ビュー描画
-// ============================================================
 function renderDay(date) {
   const times     = generateTimes();
   const ds        = formatDate(date);
@@ -417,11 +383,13 @@ function renderDay(date) {
     <div class="day-timeline">`;
   times.forEach(time => {
     const reservations = allSlots[ds]?.[time] || [];
-    const isBlocked    = reservations.some(r => r.status === 'blocked');
     const isClosed     = CLOSED_DAYS.includes(date.getDay());
     const isHoliday    = reservations.some(r => r.status === 'holiday');
+    const isBlocked    = reservations.some(r => r.status === 'blocked');
+    const isClosed2    = reservations.some(r => r.status === 'closed');
+
     if (isClosed || isHoliday) {
-      html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">${isHoliday?'休業日':'休業日'}</div></div>`;
+      html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">休業日</div></div>`;
     } else if (isBlocked) {
       html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">🔒 ブロック済み</div></div>`;
     } else if (isClosed2) {
@@ -447,9 +415,6 @@ function renderDay(date) {
   document.getElementById('mainContent').innerHTML = html;
 }
 
-// ============================================================
-// 詳細モーダル
-// ============================================================
 function showDetail(reservationId) {
   let found = null;
   Object.values(allSlots).forEach(timeMap => {
@@ -459,7 +424,6 @@ function showDetail(reservationId) {
     });
   });
   if (!found) return;
-  selectedReservation = found;
   renderModal(found);
   document.getElementById('modalOverlay').classList.add('open');
 }
@@ -497,35 +461,33 @@ function renderModal(r) {
     <div class="detail-row"><span class="detail-key">👤 氏名</span><span class="detail-val">${r.name || '未入力'}</span></div>
     <div class="detail-row"><span class="detail-key">🩹 施術</span><span class="detail-val">${getMenuLabel(r.menuId)}</span></div>
     <div class="detail-row"><span class="detail-key">💬 症状</span><span class="detail-val">${getCondLabel(r.menuId, r.conditionId)}</span></div>
-    <div class="detail-row"><span class="detail-key">状態</span><span class="detail-val"><span class="badge badge-confirmed">✅ 確定</span></span></div>
-    <div class="detail-row"><span class="detail-key">🔖 予約ID</span><span class="detail-val" style="font-size:11px;color:var(--sub)">${r.id}</span></div>`;
+    <div class="detail-row"><span class="detail-key">状態</span><span class="detail-val"><span class="badge badge-confirmed">✅ 確定</span></span></div>`;
   document.getElementById('modalActions').innerHTML = `
     <button class="btn-cancel-booking" onclick="cancelFromAdmin('${r.id}')">❌ この予約をキャンセルする</button>`;
 }
 
-function closeModal(e)     { if (e.target === document.getElementById('modalOverlay')) closeModalDirect(); }
-function closeModalDirect(){ document.getElementById('modalOverlay').classList.remove('open'); }
+function closeModal(e)      { if (e.target === document.getElementById('modalOverlay')) closeModalDirect(); }
+function closeModalDirect() { document.getElementById('modalOverlay').classList.remove('open'); }
 
-// ============================================================
-// 管理者キャンセル
-// ============================================================
 async function cancelFromAdmin(reservationId) {
   if (!confirm('この予約をキャンセルしますか？\n（患者さんへのLINE通知も送られます）')) return;
   try {
     const params = new URLSearchParams({ action: 'adminCancel', userId, reservationId });
-    await fetch(`${GAS_URL}?${params.toString()}`, { mode: 'no-cors' });
-    await new Promise(r => setTimeout(r, 1500));
-    closeModalDirect();
-    showToast('✅ キャンセルしました');
-    await loadAndRender();
+    const res  = await fetch(`${GAS_URL}?${params.toString()}`);
+    const data = await res.json();
+    if (data.success) {
+      closeModalDirect();
+      showToast('✅ キャンセルしました');
+      await loadAndRender();
+    } else {
+      showToast('⚠️ ' + (data.message || 'キャンセルに失敗しました'));
+    }
   } catch(e) {
-    showToast('⚠️ キャンセルに失敗しました');
+    console.error('キャンセルエラー:', e.message);
+    showToast('⚠️ 通信エラーが発生しました');
   }
 }
 
-// ============================================================
-// 管理者予約入力
-// ============================================================
 function openAdminBooking(date, time) {
   adminSelectedDate = date;
   adminSelectedTime = time;
@@ -596,16 +558,13 @@ async function submitAdminBooking() {
   btn.disabled = false; btn.textContent = '予約を追加する';
 }
 
-// ============================================================
-// 設定パネル
-// ============================================================
 async function openSettings() {
   try {
     const res  = await fetch(`${GAS_URL}?action=getSettings&userId=${userId}`);
     const data = await res.json();
     if (data.closed_days !== undefined) {
-      const val2 = String(data.closed_days).trim();
-      settingsClosedDays = val2 ? val2.split(',').map(Number).filter(n => !isNaN(n)) : [];
+      const val = String(data.closed_days).trim();
+      settingsClosedDays = val ? val.split(',').map(Number).filter(n => !isNaN(n)) : [];
     } else {
       settingsClosedDays = [...CLOSED_DAYS];
     }
@@ -641,8 +600,7 @@ async function saveSettingsFromUI() {
   try {
     const params = new URLSearchParams({
       action: 'saveSetting', userId,
-      key: 'closed_days',
-      value: settingsClosedDays.join(','),
+      key: 'closed_days', value: settingsClosedDays.join(','),
     });
     await fetch(`${GAS_URL}?${params.toString()}`, { mode: 'no-cors' });
     await new Promise(r => setTimeout(r, 1000));
@@ -656,12 +614,9 @@ async function saveSettingsFromUI() {
   btn.textContent = '保存する'; btn.disabled = false;
 }
 
-function closeSettings(e)     { if (e.target === document.getElementById('settingsOverlay')) closeSettingsDirect(); }
-function closeSettingsDirect(){ document.getElementById('settingsOverlay').classList.remove('open'); }
+function closeSettings(e)      { if (e.target === document.getElementById('settingsOverlay')) closeSettingsDirect(); }
+function closeSettingsDirect() { document.getElementById('settingsOverlay').classList.remove('open'); }
 
-// ============================================================
-// ユーティリティ
-// ============================================================
 function generateTimes() {
   return Array.from({length: DAY_END - DAY_START}, (_,i) =>
     `${String(DAY_START+i).padStart(2,'0')}:00`);
@@ -677,7 +632,7 @@ function calcEndTime(time) {
 function formatDateJapanese(d) {
   return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）`;
 }
-function getMenuLabel(id)           { return MENU_LABELS[id] || id || '－'; }
+function getMenuLabel(id)            { return MENU_LABELS[id] || id || '－'; }
 function getCondLabel(menuId, condId){ return COND_LABELS[menuId]?.[condId] || condId || '－'; }
 function showToast(msg) {
   const t = document.getElementById('toast');
