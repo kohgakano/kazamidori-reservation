@@ -364,7 +364,7 @@ function renderWeek(dates) {
       const isToday    = ds === today;
       const reservations = allSlots[ds]?.[time] || [];
       const isBlocked  = reservations.some(r => r.status === 'blocked');
-      if (isClosed || isHoliday) {
+      const isClosed2  = reservations.some(r => r.status === 'closed');
         html += `<td class="closed-cell"><div class="blocked-label" style="color:#888888">${'休'}</div></td>`;
       } else if (isBlocked) {
         html += `<td class="blocked-cell"><div class="blocked-label">🔒</div></td>`;
