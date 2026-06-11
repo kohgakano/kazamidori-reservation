@@ -329,7 +329,8 @@ async function init() {
     const res  = await fetch(`${GAS_URL}?action=getSettings&userId=${userId}`);
     const data = await res.json();
     if (data.closed_days !== undefined) {
-      CLOSED_DAYS = String(data.closed_days).split(',').map(Number).filter(n => !isNaN(n));
+      const val = String(data.closed_days).trim();
+      CLOSED_DAYS = val ? val.split(',').map(Number).filter(n => !isNaN(n)) : [];
     }
     if (data.holiday_dates) {
       HOLIDAY_DATES = String(data.holiday_dates).split(',').map(s => s.trim()).filter(s => s);
