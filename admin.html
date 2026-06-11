@@ -365,7 +365,7 @@ function renderWeek(dates) {
       const reservations = allSlots[ds]?.[time] || [];
       const isBlocked  = reservations.some(r => r.status === 'blocked');
       if (isClosed || isHoliday) {
-        html += `<td class="closed-cell"><div class="blocked-label" style="color:#888888">${isHoliday?'臨休':'休'}</div></td>`;
+        html += `<td class="closed-cell"><div class="blocked-label" style="color:#888888">${'休'}</div></td>`;
       } else if (isBlocked) {
         html += `<td class="blocked-cell"><div class="blocked-label">🔒</div></td>`;
       } else if (reservations.length === 0) {
@@ -418,7 +418,7 @@ function renderDay(date) {
     const isClosed     = CLOSED_DAYS.includes(date.getDay());
     const isHoliday    = reservations.some(r => r.status === 'holiday');
     if (isClosed || isHoliday) {
-      html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">${isHoliday?'🏖️ 臨時休業':'休業日'}</div></div>`;
+      html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">${isHoliday?'休業日':'休業日'}</div></div>`;
     } else if (isBlocked) {
       html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">🔒 ブロック済み</div></div>`;
     } else {
