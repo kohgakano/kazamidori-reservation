@@ -213,7 +213,7 @@ const ADMIN_IDS   = ['U715fc71e2b7b3501161496aa934c0419','Ufaa1a7d88eb066170c59d
 const SLOT_MIN      = 60;
 const DAY_START     = 9;
 const DAY_END       = 24;
-let   CLOSED_DAYS   = [0]; // 設定シートから動的に読み込む
+let   CLOSED_DAYS   = []; // 設定シートから動的に読み込む
 const DAY_NAMES     = ['日','月','火','水','木','金','土'];
 
 const MENU_LABELS = { normal: '通常施術' };
@@ -345,7 +345,8 @@ function renderWeek(dates) {
   let html = `<div class="week-wrap"><table class="week-table"><thead><tr><th class="time-col">時刻</th>`;
   dates.forEach(d => {
     const ds  = formatDate(d);
-    const cls = CLOSED_DAYS.includes(d.getDay()) ? 'closed-col' : (ds===today ? 'today-col' : '');
+    const isHol = (allSlots[ds]?.[generateTimes()[0]] || []).some(r => r.status === 'holiday');
+    const cls = (CLOSED_DAYS.includes(d.getDay()) || isHol) ? 'closed-col' : (ds===today ? 'today-col' : '');
     html += `<th class="${cls}"><span class="day-num">${d.getDate()}</span><span class="day-name">${DAY_NAMES[d.getDay()]}</span></th>`;
   });
   html += '</tr></thead><tbody>';
@@ -354,11 +355,12 @@ function renderWeek(dates) {
     dates.forEach(d => {
       const ds         = formatDate(d);
       const isClosed   = CLOSED_DAYS.includes(d.getDay());
+      const isHoliday  = (allSlots[ds]?.[times[0]] || []).some(r => r.status === 'holiday');
       const isToday    = ds === today;
       const reservations = allSlots[ds]?.[time] || [];
       const isBlocked  = reservations.some(r => r.status === 'blocked');
-      if (isClosed) {
-        html += `<td class="closed-cell"></td>`;
+      if (isClosed || isHoliday) {
+        html += `<td class="closed-cell"><div class="blocked-label" style="color:#888888">${isHoliday?'臨休':'休'}</div></td>`;
       } else if (isBlocked) {
         html += `<td class="blocked-cell"><div class="blocked-label">🔒</div></td>`;
       } else if (reservations.length === 0) {
@@ -409,8 +411,9 @@ function renderDay(date) {
     const reservations = allSlots[ds]?.[time] || [];
     const isBlocked    = reservations.some(r => r.status === 'blocked');
     const isClosed     = CLOSED_DAYS.includes(date.getDay());
-    if (isClosed) {
-      html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">休業日</div></div>`;
+    const isHoliday    = reservations.some(r => r.status === 'holiday');
+    if (isClosed || isHoliday) {
+      html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">${isHoliday?'🏖️ 臨時休業':'休業日'}</div></div>`;
     } else if (isBlocked) {
       html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">🔒 ブロック済み</div></div>`;
     } else {
