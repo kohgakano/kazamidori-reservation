@@ -465,9 +465,11 @@ function selectSlot(date, time, remaining, btn) {
   document.getElementById('selectedBadge').textContent =
     `📅 ${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}） 　🕐 ${time}〜${calcEndTime(time)}`;
 
+  renderCountBtns();
+  renderNameInputs();
   renderMenuBtns();
   document.getElementById('conditionArea').style.display = 'none';
-  document.getElementById('inputName').value = formData.name; // 名前は保持
+
   validateForm();
   document.getElementById('bookingPanel').classList.add('open');
 }
@@ -482,7 +484,7 @@ function closePanel() {
 // 人数・氏名入力
 // ============================================================
 function renderCountBtns() {
-  const max = Math.min(MAX_PER_SLOT, 5);
+  const max = Math.min(MAX_PER_SLOT, 3);
   document.getElementById('countBtns').innerHTML = Array.from({length: max}, (_,i) => `
     <button class="count-btn ${selectedCount===i+1?'selected':''}" onclick="selectCount(${i+1})">${i+1}</button>
   `).join('');
