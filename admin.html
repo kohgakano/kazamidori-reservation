@@ -368,6 +368,8 @@ function renderWeek(dates) {
         html += `<td class="closed-cell"><div class="blocked-label" style="color:#888888">${'休'}</div></td>`;
       } else if (isBlocked) {
         html += `<td class="blocked-cell"><div class="blocked-label">🔒</div></td>`;
+      } else if (isClosed2) {
+        html += `<td class="blocked-cell"><div class="blocked-label" style="color:#e74c3c;font-size:9px">受付<br>終了</div></td>`;
       } else if (reservations.length === 0) {
         html += `<td class="empty-cell empty-clickable ${isToday?'today-bg':''}" onclick="openAdminBooking('${ds}','${time}')"></td>`;
       } else {
@@ -421,6 +423,8 @@ function renderDay(date) {
       html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">${isHoliday?'休業日':'休業日'}</div></div>`;
     } else if (isBlocked) {
       html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">🔒 ブロック済み</div></div>`;
+    } else if (isClosed2) {
+      html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content" style="color:#e74c3c">🚫 受付終了</div></div>`;
     } else {
       const cards = reservations.map(r => `
         <div class="booking-card" onclick="showDetail('${r.id}')">
