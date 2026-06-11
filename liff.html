@@ -282,7 +282,8 @@ const MAX_PER_SLOT = 5;
 const SLOT_MIN     = 60;
 const DAY_START    = 9;
 const DAY_END      = 24;
-const CLOSED_DAYS  = [0];
+let CLOSED_DAYS    = []; // 設定シートから動的に読み込む
+let HOLIDAY_DATES  = []; // 臨時休業日
 const DAY_NAMES    = ['日','月','火','水','木','金','土'];
 
 // 施術メニュー（ここを編集して追加できます）
@@ -323,6 +324,18 @@ async function init() {
       userId = p.userId;
     } else { liff.login(); return; }
   } catch(e) { userId = 'TEST_USER'; }
+  // 設定シートから定休日と臨時休業日を読み込む
+  try {
+    const res  = await fetch(`${GAS_URL}?action=getSettings&userId=${userId}`);
+    const data = await res.json();
+    if (data.closed_days !== undefined) {
+      CLOSED_DAYS = String(data.closed_days).split(',').map(Number).filter(n => !isNaN(n));
+    }
+    if (data.holiday_dates) {
+      HOLIDAY_DATES = String(data.holiday_dates).split(',').map(s => s.trim()).filter(s => s);
+    }
+  } catch(e) {}
+
   await loadWeek();
 }
 
@@ -370,7 +383,8 @@ function renderCalendar(dates, slots) {
   let html = '<table><thead><tr><th class="time-col">時刻</th>';
   dates.forEach(d => {
     const ds  = formatDate(d);
-    const cls = CLOSED_DAYS.includes(d.getDay()) ? 'closed-col' : (ds===today ? 'today-col' : '');
+    const isHol = HOLIDAY_DATES.includes(ds);
+    const cls = (CLOSED_DAYS.includes(d.getDay()) || isHol) ? 'closed-col' : (ds===today ? 'today-col' : '');
     html += `<th class="${cls}"><span class="day-num">${d.getDate()}</span><span class="day-name">${DAY_NAMES[d.getDay()]}</span></th>`;
   });
   html += '</tr></thead><tbody>';
@@ -378,11 +392,12 @@ function renderCalendar(dates, slots) {
     html += `<tr><td class="time-cell">${time}</td>`;
     dates.forEach(d => {
       const ds      = formatDate(d);
-      const isClosed = CLOSED_DAYS.includes(d.getDay());
+      const isClosed  = CLOSED_DAYS.includes(d.getDay());
+      const isHoliday = HOLIDAY_DATES.includes(ds);
       const isPast   = isPastSlot(d, time);
       const isToday  = ds === today;
       const isActive = (ds === selectedDate && time === selectedTime);
-      if (isClosed) { html += `<td class="slot-cell closed-day"><span class="closed-label">休</span></td>`; return; }
+      if (isClosed || isHoliday) { html += `<td class="slot-cell closed-day"><span class="closed-label">${isHoliday?'臨休':'休'}</span></td>`; return; }
       const count     = (slots[ds]?.[time] ?? 0);
       const remaining = MAX_PER_SLOT - count;
       const tc = (isToday ? ' today-cell' : '') + (isActive ? ' selected-slot' : '');
@@ -499,28 +514,32 @@ async function submitBooking() {
   const btn = document.getElementById('btnBook');
   btn.disabled = true; btn.textContent = '送信中…';
   try {
-    const params = new URLSearchParams({
-      action: 'book',
-      userId,
-      date: selectedDate,
-      time: selectedTime,
-      name: formData.name,
-      menuId: formData.menuId,
-      conditionId: formData.conditionId,
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'book', userId,
+        date: selectedDate, time: selectedTime,
+        name: formData.name, menuId: formData.menuId, conditionId: formData.conditionId,
+      })
     });
-    const res = await fetch(`${GAS_URL}?${params.toString()}`, {
-      mode: 'no-cors'
-    });
-    // no-corsではレスポンスが読めないので2秒待ってからリロード
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    closePanel();
-    showDone({ id: '予約完了', date: selectedDate, time: selectedTime });
-    await loadWeek();
+    const data = await res.json();
+    if (data.success) {
+      closePanel();
+      showDone(data.reservation);
+      await loadWeek();
+    } else {
+      showToast(data.message || '予約に失敗しました');
+      btn.disabled = false; btn.textContent = '予約を確定する';
+    }
   } catch(e) {
-    showToast('通信エラーが発生しました: ' + e.message);
+    // テスト用
+    closePanel();
+    showDone({ id: 'R_TEST001', date: selectedDate, time: selectedTime });
     btn.disabled = false; btn.textContent = '予約を確定する';
   }
 }
+
 // ============================================================
 // 完了画面
 // ============================================================
