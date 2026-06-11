@@ -484,7 +484,7 @@ function closePanel() {
 // 人数・氏名入力
 // ============================================================
 function renderCountBtns() {
-  const max = Math.min(MAX_PER_SLOT, 3);
+  const max = Math.min(MAX_PER_SLOT, 5);
   document.getElementById('countBtns').innerHTML = Array.from({length: max}, (_,i) => `
     <button class="count-btn ${selectedCount===i+1?'selected':''}" onclick="selectCount(${i+1})">${i+1}</button>
   `).join('');
@@ -580,10 +580,12 @@ async function submitBooking() {
   const btn = document.getElementById('btnBook');
   btn.disabled = true; btn.textContent = '送信中…';
   try {
+    // 送信直前に最新の入力値を取得
+    const latestNames = getNameValues();
     const params = new URLSearchParams({
       action: 'book', userId,
       date: selectedDate, time: selectedTime,
-      names: formData.names.join(','), menuId: formData.menuId, conditionId: formData.conditionId,
+      names: latestNames.join(','), menuId: formData.menuId, conditionId: formData.conditionId,
     });
     await fetch(`${GAS_URL}?${params.toString()}`, { mode: 'no-cors' });
     // no-corsではレスポンスが読めないので2秒待ってからリロード
