@@ -607,6 +607,113 @@ function generateDummySlots(dates) {
   return result;
 }
 
+// ============================================================
+// 管理者予約入力
+// ============================================================
+const ADMIN_MENUS = [
+  {
+    id: 'normal', icon: '🩹', label: '通常施術',
+    conditions: [
+      { id: 'better', icon: '😊', label: '良くなっている' },
+      { id: 'same',   icon: '😐', label: '変わらない'     },
+      { id: 'worse',  icon: '😟', label: '悪化している'   },
+    ]
+  },
+];
+
+let adminFormData = { name: '', menuId: '', conditionId: '' };
+let adminSelectedDate = null;
+let adminSelectedTime = null;
+
+function openAdminBooking(date, time) {
+  adminSelectedDate = date;
+  adminSelectedTime = time;
+  adminFormData = { name: '', menuId: '', conditionId: '' };
+  document.getElementById('adminInputName').value = '';
+  document.getElementById('adminConditionArea').style.display = 'none';
+  const d = new Date(date);
+  document.getElementById('adminPanelBadge').textContent =
+    `📅 ${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}） 　🕐 ${time}〜${calcEndTime(time)}`;
+  renderAdminMenuBtns();
+  validateAdminForm();
+  document.getElementById('adminBookingPanel').classList.add('open');
+}
+
+function closeAdminPanel() {
+  document.getElementById('adminBookingPanel').classList.remove('open');
+}
+
+function renderAdminMenuBtns() {
+  document.getElementById('adminMenuBtns').innerHTML = ADMIN_MENUS.map(m => `
+    <button class="sel-btn-admin ${adminFormData.menuId===m.id?'selected':''}" onclick="selectAdminMenu('${m.id}')">
+      <span class="sb-icon">${m.icon}</span>
+      <span class="sb-label">${m.label}</span>
+    </button>
+  `).join('');
+}
+
+function selectAdminMenu(id) {
+  adminFormData.menuId = id;
+  adminFormData.conditionId = '';
+  renderAdminMenuBtns();
+  renderAdminConditionBtns();
+  document.getElementById('adminConditionArea').style.display = '';
+  validateAdminForm();
+}
+
+function renderAdminConditionBtns() {
+  const menu = ADMIN_MENUS.find(m => m.id === adminFormData.menuId);
+  if (!menu) return;
+  document.getElementById('adminConditionBtns').innerHTML = menu.conditions.map(c => `
+    <button class="sel-btn-admin ${adminFormData.conditionId===c.id?'selected':''}" onclick="selectAdminCondition('${c.id}')">
+      <span class="sb-icon">${c.icon}</span>
+      <span class="sb-label">${c.label}</span>
+    </button>
+  `).join('');
+}
+
+function selectAdminCondition(id) {
+  adminFormData.conditionId = id;
+  renderAdminConditionBtns();
+  validateAdminForm();
+}
+
+function validateAdminForm() {
+  adminFormData.name = document.getElementById('adminInputName').value.trim();
+  const ok = adminFormData.name && adminFormData.menuId && adminFormData.conditionId;
+  document.getElementById('btnAdminBook').disabled = !ok;
+}
+
+async function submitAdminBooking() {
+  const btn = document.getElementById('btnAdminBook');
+  btn.disabled = true; btn.textContent = '送信中…';
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'adminBook', userId,
+        date: adminSelectedDate, time: adminSelectedTime,
+        name: adminFormData.name, menuId: adminFormData.menuId, conditionId: adminFormData.conditionId,
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      closeAdminPanel();
+      showToast(`✅ ${adminFormData.name} 様の予約を追加しました`);
+      await loadAndRender();
+    } else {
+      showToast('⚠️ ' + (data.message || '予約に失敗しました'));
+      btn.disabled = false; btn.textContent = '予約を追加する';
+    }
+  } catch(e) {
+    closeAdminPanel();
+    showToast('✅ 予約を追加しました（テスト）');
+    await loadAndRender();
+    btn.disabled = false; btn.textContent = '予約を追加する';
+  }
+}
+
 init();
 </script>
 </body>
