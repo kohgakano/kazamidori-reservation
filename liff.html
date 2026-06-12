@@ -377,6 +377,12 @@ async function loadWeek() {
     const res = await fetch(`${GAS_URL}?action=getSlots&dates=${ds.join(',')}&userId=${userId}`);
     const data = await res.json();
     slotsCache = data.slots || {};
+    // 臨時休業日を更新
+    if (data.holiday_dates !== undefined) {
+      HOLIDAY_DATES = data.holiday_dates
+        ? data.holiday_dates.split(',').map(s => s.trim()).filter(s => s)
+        : [];
+    }
   } catch(e) { slotsCache = generateDummySlots(getWeekDates(weekOffset)); }
   renderCalendar(getWeekDates(weekOffset), slotsCache);
 }
