@@ -376,13 +376,8 @@ async function loadWeek() {
     const ds = dates.map(d => formatDate(d));
     const res = await fetch(`${GAS_URL}?action=getSlots&dates=${ds.join(',')}&userId=${userId}`);
     const data = await res.json();
-    slotsCache = data.slots || {};
-    // 臨時休業日を更新
-    if (data.holiday_dates !== undefined) {
-      HOLIDAY_DATES = data.holiday_dates
-        ? data.holiday_dates.split(',').map(s => s.trim()).filter(s => s)
-        : [];
-    }
+    slotsCache  = data.slots || {};
+    limitsCache = data.limits || {};
   } catch(e) { slotsCache = generateDummySlots(getWeekDates(weekOffset)); }
   renderCalendar(getWeekDates(weekOffset), slotsCache);
 }
@@ -424,7 +419,8 @@ function renderCalendar(dates, slots) {
       const isActive = (ds === selectedDate && time === selectedTime);
       if (isClosed || isHoliday) { html += `<td class="slot-cell closed-day"><span class="closed-label">${'休'}</span></td>`; return; }
       const count     = (slots[ds]?.[time] ?? 0);
-      const remaining = MAX_PER_SLOT - count;
+      const limit     = limitsCache[ds]?.[time] ?? MAX_PER_SLOT;
+      const remaining = limit - count;
       const tc = (isToday ? ' today-cell' : '') + (isActive ? ' selected-slot' : '');
       if (isPast || remaining <= 0) {
         html += `<td class="slot-cell${tc}"><button class="slot-btn ${isPast?'slot-closed':'slot-full'}" disabled>${isPast?'－':'×'}</button></td>`;
@@ -490,10 +486,25 @@ function closePanel() {
 // 人数・氏名入力
 // ============================================================
 function renderCountBtns() {
-  const max = Math.min(MAX_PER_SLOT, 3);
+  const current   = slotsCache[selectedDate]?.[selectedTime] ?? 0;
+  const limit     = limitsCache[selectedDate]?.[selectedTime] ?? MAX_PER_SLOT;
+  const remaining = Math.max(0, limit - current);
+  const max       = Math.min(remaining, 3);
+
+  if (max === 0) {
+    document.getElementById('countBtns').innerHTML = '<span style="color:#e74c3c;font-size:13px">この枠は満枠です</span>';
+    return;
+  }
+
   document.getElementById('countBtns').innerHTML = Array.from({length: max}, (_,i) => `
     <button class="count-btn ${selectedCount===i+1?'selected':''}" onclick="selectCount(${i+1})">${i+1}</button>
   `).join('');
+
+  if (selectedCount > max) {
+    selectedCount = 1;
+    formData.names = [''];
+    renderNameInputs();
+  }
 }
 
 function selectCount(n) {
