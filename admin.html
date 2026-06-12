@@ -108,6 +108,17 @@
   .btn-admin-book { width: 100%; background: var(--teal); color: #fff; border: none; border-radius: var(--radius); padding: 14px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: var(--font); }
   .btn-admin-book:disabled { background: #aaaaaa; cursor: default; }
 
+  /* 設定タブ */
+  .settings-tab-btn { flex:1; padding:8px; border:none; background:none; font-family:var(--font); font-size:13px; font-weight:700; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; }
+  .settings-tab-btn.active { color:var(--teal); border-bottom-color:var(--teal); }
+  .settings-tab-btn.inactive { color:var(--sub); }
+
+  /* 上限入力グリッド */
+  .limit-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .limit-item { display:flex; align-items:center; gap:6px; background:#f9f9f9; padding:8px; border-radius:var(--radius); }
+  .limit-time { font-size:13px; font-weight:600; width:50px; }
+  .limit-input { width:60px; padding:6px; border:1.5px solid var(--border); border-radius:4px; font-size:14px; text-align:center; font-family:var(--font); }
+
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(10px); background: #333333; color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 13px; opacity: 0; transition: all .3s; z-index: 500; white-space: nowrap; pointer-events: none; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
@@ -171,14 +182,43 @@
       <span>⚙️ 営業設定</span>
       <button class="modal-close" onclick="closeSettingsDirect()">✕</button>
     </div>
-    <div style="margin-bottom:16px">
+
+    <!-- タブ -->
+    <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--border)">
+      <button id="tabSettingsClosed" class="settings-tab-btn active" onclick="switchSettingsTab('closed')">定休日</button>
+      <button id="tabSettingsLimits" class="settings-tab-btn inactive" onclick="switchSettingsTab('limits')">上限設定</button>
+    </div>
+
+    <!-- 定休日タブ -->
+    <div id="settingsTabClosed">
       <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text)">定休日</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap" id="closedDayBtns"></div>
+      <button id="btnSaveSettings" onclick="saveSettingsFromUI()"
+        style="width:100%;background:var(--teal);color:#fff;border:none;border-radius:8px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:16px">
+        保存する
+      </button>
     </div>
-    <button id="btnSaveSettings" onclick="saveSettingsFromUI()"
-      style="width:100%;background:var(--teal);color:#fff;border:none;border-radius:8px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">
-      保存する
-    </button>
+
+    <!-- 上限設定タブ -->
+    <div id="settingsTabLimits" style="display:none">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">曜日：</div>
+        <select id="limitDaySelect" onchange="renderLimitInputs()" style="flex:1;padding:8px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:var(--font);font-size:14px">
+          <option value="1">月曜</option>
+          <option value="2">火曜</option>
+          <option value="3">水曜</option>
+          <option value="4">木曜</option>
+          <option value="5">金曜</option>
+          <option value="6">土曜</option>
+          <option value="0">日曜</option>
+        </select>
+      </div>
+      <div class="limit-grid" id="limitInputs"></div>
+      <button onclick="saveLimitSettings()"
+        style="width:100%;background:var(--teal);color:#fff;border:none;border-radius:8px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:16px">
+        保存する
+      </button>
+    </div>
   </div>
 </div>
 
@@ -221,15 +261,16 @@ const ADMIN_MENUS = [
   },
 ];
 
-let userId    = null;
-let isAdmin   = false;
-let viewMode  = 'week';
-let offset    = 0;
-let allSlots  = {};
-let adminFormData     = { name: '', menuId: '', conditionId: '' };
-let adminSelectedDate = null;
-let adminSelectedTime = null;
+let userId             = null;
+let isAdmin            = false;
+let viewMode           = 'week';
+let offset             = 0;
+let allSlots           = {};
+let adminFormData      = { name: '', menuId: '', conditionId: '' };
+let adminSelectedDate  = null;
+let adminSelectedTime  = null;
 let settingsClosedDays = [];
+let slotLimits         = {};
 
 async function init() {
   try {
@@ -483,7 +524,6 @@ async function cancelFromAdmin(reservationId) {
       showToast('⚠️ ' + (data.message || 'キャンセルに失敗しました'));
     }
   } catch(e) {
-    console.error('キャンセルエラー:', e.message);
     showToast('⚠️ 通信エラーが発生しました');
   }
 }
@@ -558,7 +598,12 @@ async function submitAdminBooking() {
   btn.disabled = false; btn.textContent = '予約を追加する';
 }
 
+// ============================================================
+// 設定パネル
+// ============================================================
 async function openSettings() {
+  switchSettingsTab('closed');
+  slotLimits = {};
   try {
     const res  = await fetch(`${GAS_URL}?action=getSettings&userId=${userId}`);
     const data = await res.json();
@@ -573,6 +618,14 @@ async function openSettings() {
   }
   renderClosedDayBtns();
   document.getElementById('settingsOverlay').classList.add('open');
+}
+
+function switchSettingsTab(tab) {
+  document.getElementById('settingsTabClosed').style.display = tab === 'closed' ? '' : 'none';
+  document.getElementById('settingsTabLimits').style.display = tab === 'limits' ? '' : 'none';
+  document.getElementById('tabSettingsClosed').className = `settings-tab-btn ${tab==='closed'?'active':'inactive'}`;
+  document.getElementById('tabSettingsLimits').className = `settings-tab-btn ${tab==='limits'?'active':'inactive'}`;
+  if (tab === 'limits' && Object.keys(slotLimits).length === 0) loadLimitSettings();
 }
 
 function renderClosedDayBtns() {
@@ -604,6 +657,9 @@ async function saveSettingsFromUI() {
     });
     await fetch(`${GAS_URL}?${params.toString()}`, { mode: 'no-cors' });
     await new Promise(r => setTimeout(r, 1000));
+    // キャッシュクリア
+    const cacheParams = new URLSearchParams({ action: 'clearCache', userId });
+    await fetch(`${GAS_URL}?${cacheParams.toString()}`, { mode: 'no-cors' });
     CLOSED_DAYS = [...settingsClosedDays];
     closeSettingsDirect();
     showToast('✅ 設定を保存しました');
@@ -612,6 +668,64 @@ async function saveSettingsFromUI() {
     showToast('⚠️ 保存に失敗しました');
   }
   btn.textContent = '保存する'; btn.disabled = false;
+}
+
+// ============================================================
+// 上限設定
+// ============================================================
+async function loadLimitSettings() {
+  try {
+    const res  = await fetch(`${GAS_URL}?action=getSlotLimits&userId=${userId}`);
+    const data = await res.json();
+    if (data.limits) {
+      slotLimits = data.limits;
+      renderLimitInputs();
+    } else {
+      showToast('⚠️ 上限設定の読み込みに失敗しました');
+    }
+  } catch(e) {
+    showToast('⚠️ 通信エラーが発生しました');
+  }
+}
+
+function renderLimitInputs() {
+  const day   = document.getElementById('limitDaySelect').value;
+  const times = Object.keys(slotLimits).sort();
+  document.getElementById('limitInputs').innerHTML = times.map(time => `
+    <div class="limit-item">
+      <span class="limit-time">${time}</span>
+      <input type="number" min="0" max="10" value="${slotLimits[time]?.[day] ?? 0}"
+        id="limit_${time.replace(':','_')}" class="limit-input">
+    </div>`).join('');
+}
+
+async function saveLimitSettings() {
+  const day   = document.getElementById('limitDaySelect').value;
+  const times = Object.keys(slotLimits).sort();
+  const newLimits = {};
+  times.forEach(time => {
+    const el = document.getElementById(`limit_${time.replace(':','_')}`);
+    newLimits[time] = el ? Number(el.value) : 0;
+  });
+  try {
+    const params = new URLSearchParams({
+      action: 'saveSlotLimits', userId,
+      day, limits: JSON.stringify(newLimits),
+    });
+    const res  = await fetch(`${GAS_URL}?${params.toString()}`);
+    const data = await res.json();
+    if (data.success) {
+      times.forEach(time => {
+        if (!slotLimits[time]) slotLimits[time] = {};
+        slotLimits[time][day] = newLimits[time];
+      });
+      showToast('✅ 上限設定を保存しました');
+    } else {
+      showToast('⚠️ ' + (data.message || '保存に失敗しました'));
+    }
+  } catch(e) {
+    showToast('⚠️ 通信エラーが発生しました');
+  }
 }
 
 function closeSettings(e)      { if (e.target === document.getElementById('settingsOverlay')) closeSettingsDirect(); }
