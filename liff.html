@@ -12,6 +12,8 @@
     --teal-mid:  #4aab9c;
     --full:      #f5e6e6;
     --full-text: #c0392b;
+    --warn:      #fff8e1;
+    --warn-text: #e67e00;
     --open:      #e8f4f2;
     --open-text: #2a7a6f;
     --border:    #d0d0d0;
@@ -31,67 +33,85 @@
     position: sticky; top: 0; z-index: 100;
   }
   header h1 { font-size: 16px; font-weight: 600; }
-  .week-nav { display: flex; align-items: center; gap: 8px; }
-  .week-nav button {
-    background: rgba(255,255,255,.2); border: none; color: #fff;
-    padding: 5px 10px; border-radius: 4px; font-size: 13px; cursor: pointer;
-  }
-  .week-nav button:disabled { opacity: .4; cursor: default; }
-  .week-label { font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .today-label { font-size: 13px; opacity: .85; }
 
-  /* カレンダー */
-  .calendar-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 10px 0 8px; }
-  table {
-    border-collapse: collapse; background: #fff;
-    margin: 0 10px; width: calc(100% - 20px);
-    border-radius: var(--radius); overflow: hidden;
+  /* 受付時間外画面 */
+  .outside-screen {
+    display: none; position: fixed; inset: 0; background: #fff;
+    z-index: 400; flex-direction: column; align-items: center;
+    justify-content: center; padding: 32px; text-align: center;
+  }
+  .outside-screen.open { display: flex; }
+  .outside-icon { font-size: 60px; margin-bottom: 16px; }
+  .outside-screen h2 { font-size: 20px; font-weight: 700; color: #555; margin-bottom: 12px; }
+  .outside-screen p { color: var(--sub); font-size: 14px; line-height: 1.8; }
+  .next-open-badge {
+    background: var(--teal-light); border-radius: var(--radius);
+    padding: 14px 24px; margin: 20px 0; font-size: 16px;
+    font-weight: 700; color: var(--teal);
+  }
+
+  /* 当日スロット一覧 */
+  .slots-wrap { padding: 12px; }
+  .date-header {
+    background: #fff; border-radius: var(--radius);
+    padding: 12px 16px; margin-bottom: 10px;
     box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    display: flex; align-items: center; justify-content: space-between;
   }
-  thead th {
-    background: var(--teal); color: #fff;
-    padding: 6px 2px; text-align: center;
-    font-weight: 600; font-size: 11px;
-    border-right: 1px solid rgba(255,255,255,.15); white-space: nowrap;
+  .date-header-main { font-size: 17px; font-weight: 700; color: var(--teal); }
+  .date-header-sub { font-size: 12px; color: var(--sub); margin-top: 2px; }
+  .reception-closed-notice {
+    background: #f5e6e6; border-radius: var(--radius);
+    padding: 14px 16px; margin-bottom: 10px; color: #c0392b;
+    font-size: 14px; font-weight: 600; text-align: center;
   }
-  thead th.time-col { background: #1f5f56; width: 40px; min-width: 40px; }
-  thead th.today-col { background: #1a9e8a; }
-  thead th.closed-col { background: #888; }
-  .day-num { font-size: 14px; font-weight: 700; display: block; }
-  .day-name { font-size: 10px; opacity: .85; }
-  td.time-cell {
-    background: #f7faf9; color: var(--sub); font-size: 11px; font-weight: 600;
-    text-align: center; padding: 0 2px;
-    border-right: 2px solid var(--teal); border-bottom: 1px solid var(--border);
-    white-space: nowrap; height: 32px;
+
+  .slots-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
   }
-  td.slot-cell {
-    text-align: center; padding: 2px;
-    border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); height: 32px;
+  .slot-item {
+    background: #fff; border-radius: var(--radius);
+    border: 2px solid var(--border);
+    padding: 14px 12px; cursor: pointer;
+    transition: all .15s; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
   }
-  td.slot-cell.selected-slot { background: #fff3cd; }
-  .slot-btn {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 30px; height: 26px; border-radius: 4px; border: none;
-    font-size: 16px; font-weight: 700; cursor: pointer; transition: transform .1s;
+  .slot-item.open { border-color: var(--teal); }
+  .slot-item.open:active { transform: scale(.97); }
+  .slot-item.warn { border-color: #e6a817; }
+  .slot-item.full { border-color: #e3c4c4; background: #fafafa; cursor: pointer; opacity: .85; }
+  .full-notice {
+    background: #fdecea; color: #c0392b; border-radius: var(--radius);
+    padding: 10px 12px; font-size: 12px; font-weight: 700; line-height: 1.6;
   }
-  .slot-btn:active { transform: scale(.9); }
-  .slot-open { background: var(--open); color: var(--open-text); }
-  .slot-open:hover { background: var(--teal-mid); color: #fff; }
-  .slot-open.active { background: var(--teal); color: #fff; box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--teal); }
-  .slot-full { background: var(--full); color: var(--full-text); cursor: default; }
-  .slot-closed { background: transparent; color: #ccc; cursor: default; font-size: 12px; }
-  td.closed-day { background: #f0f0f0; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-  .closed-label { display: flex; align-items: center; justify-content: center; height: 100%; color: #aaa; font-size: 10px; }
-  td.today-cell { background: #fffdf0; }
+  .slot-item.past { border-color: #e0e0e0; background: #f5f5f5; cursor: default; opacity: .55; }
+  .slot-item.closed-slot { border-color: #e0e0e0; background: #f5f5f5; cursor: default; }
+  .slot-item.selected { background: var(--teal-light); border-color: var(--teal); box-shadow: 0 0 0 3px rgba(42,122,111,.2); }
+
+  .slot-time { font-size: 15px; font-weight: 700; color: var(--text); }
+  .slot-end  { font-size: 11px; color: var(--sub); }
+  .slot-mark { font-size: 22px; font-weight: 700; line-height: 1; }
+  .slot-mark.mark-open { color: var(--open-text); }
+  .slot-mark.mark-warn { color: #e6a817; }
+  .slot-mark.mark-full { color: var(--full-text); }
+  .slot-mark.mark-past { color: #ccc; }
+  .slot-mark.mark-closed { color: #bbb; font-size: 14px; }
 
   /* 凡例 */
   .legend {
-    display: flex; gap: 12px; padding: 6px 12px;
+    display: flex; gap: 14px; padding: 8px 12px;
     font-size: 11px; color: var(--sub); background: #fff;
-    border-top: 1px solid var(--border); justify-content: center;
+    border-top: 1px solid var(--border); justify-content: center; flex-wrap: wrap;
   }
   .legend-item { display: flex; align-items: center; gap: 4px; }
-  .legend-dot { width: 18px; height: 18px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+  .legend-mark { font-size: 14px; font-weight: 700; }
+
+  /* ローディング */
+  .loading { display: flex; align-items: center; justify-content: center; min-height: 160px; color: var(--sub); gap: 10px; }
+  .spinner { width: 18px; height: 18px; border: 2px solid #ddd; border-top-color: var(--teal); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ========== 予約フォームパネル（下部固定） ========== */
   .booking-panel {
@@ -103,6 +123,7 @@
     transition: transform .3s ease;
     z-index: 200;
     max-width: 480px; margin: 0 auto;
+    max-height: 80vh; overflow-y: auto;
   }
   .booking-panel.open { transform: translateY(0); }
 
@@ -110,6 +131,7 @@
     display: flex; align-items: center; justify-content: space-between;
     padding: 12px 16px 8px;
     border-bottom: 1px solid #f0f0f0;
+    position: sticky; top: 0; background: #fff; z-index: 1;
   }
   .panel-handle h3 { font-size: 14px; font-weight: 700; color: var(--teal); }
   .panel-close { background: none; border: none; font-size: 18px; color: #aaa; cursor: pointer; padding: 2px 6px; }
@@ -122,35 +144,24 @@
   }
 
   /* フォーム本体 */
-  .panel-body { padding: 8px 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .panel-body { padding: 8px 14px 16px; display: flex; flex-direction: column; gap: 12px; }
 
   .field-label {
-    font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 4px;
+    font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 5px;
     display: flex; align-items: center; gap: 4px;
   }
   .req { background: #c0392b; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 4px; border-radius: 3px; }
+  .opt { background: #888; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 4px; border-radius: 3px; }
 
   .text-input {
     width: 100%; border: 1.5px solid var(--border); border-radius: var(--radius);
-    padding: 10px 12px; font-size: 15px; font-family: var(--font); outline: none;
+    padding: 11px 12px; font-size: 15px; font-family: var(--font); outline: none;
     transition: border-color .15s;
   }
   .text-input:focus { border-color: var(--teal); }
 
-  /* 横並びボタン選択 */
-  .btn-row { display: flex; gap: 7px; flex-wrap: wrap; }
-
-  .sel-btn {
-    flex: 1; min-width: 0;
-    border: 2px solid var(--border); border-radius: var(--radius);
-    padding: 8px 6px; cursor: pointer; text-align: center;
-    background: #fff; transition: all .15s; white-space: nowrap;
-    font-family: var(--font);
-  }
-  .sel-btn:hover { border-color: var(--teal-mid); background: var(--teal-light); }
-  .sel-btn.selected { border-color: var(--teal); background: var(--teal-light); }
-  .sel-btn .sb-icon { font-size: 18px; display: block; }
-  .sel-btn .sb-label { font-size: 12px; font-weight: 700; margin-top: 2px; }
+  .promo-hint { font-size: 11px; color: var(--sub); margin-top: 4px; }
+  .promo-ok { color: var(--teal); font-weight: 700; }
 
   /* 予約ボタン */
   .btn-book {
@@ -176,7 +187,7 @@
     padding: 14px 18px; margin: 16px 0;
     width: 100%; max-width: 320px; text-align: left;
   }
-  .done-detail p { font-size: 14px; margin-bottom: 5px; }
+  .done-detail p { font-size: 14px; margin-bottom: 6px; }
   .done-detail p span { font-weight: 700; }
   .done-screen > p { color: var(--sub); font-size: 13px; line-height: 1.7; }
   .btn-close {
@@ -184,22 +195,6 @@
     border-radius: var(--radius); padding: 13px 28px;
     font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 12px;
   }
-
-  /* ローディング */
-  .loading { display: flex; align-items: center; justify-content: center; min-height: 160px; color: var(--sub); gap: 10px; }
-  .spinner { width: 18px; height: 18px; border: 2px solid #ddd; border-top-color: var(--teal); border-radius: 50%; animation: spin .7s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* 人数ボタン */
-  .count-btn {
-    width: 44px; height: 44px; border-radius: 8px;
-    border: 2px solid var(--border); background: #fff;
-    font-size: 15px; font-weight: 700; cursor: pointer;
-    font-family: var(--font); transition: all .15s;
-  }
-  .count-btn.selected { border-color: var(--teal); background: var(--teal-light); color: var(--teal); }
-  .name-input-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-  .name-label { font-size: 12px; color: var(--sub); white-space: nowrap; width: 40px; flex-shrink: 0; }
 
   /* トースト */
   .toast {
@@ -215,29 +210,28 @@
 
 <header>
   <h1>🏥 ご予約</h1>
-  <div class="week-nav">
-    <button id="prevWeek" onclick="changeWeek(-1)" disabled>‹ 前週</button>
-    <span class="week-label" id="weekLabel"></span>
-    <button id="nextWeek" onclick="changeWeek(1)">次週 ›</button>
-  </div>
+  <span class="today-label" id="headerDate"></span>
 </header>
 
-<div class="calendar-wrap">
-  <div id="calendarBody" class="loading">
+<div id="mainContent">
+  <div class="loading">
     <div class="spinner"></div> 読み込み中…
   </div>
 </div>
 
-<div class="legend">
-  <div class="legend-item">
-    <div class="legend-dot" style="background:var(--open);color:var(--open-text)">○</div><span>空きあり</span>
-  </div>
-  <div class="legend-item">
-    <div class="legend-dot" style="background:var(--full);color:var(--full-text)">×</div><span>満枠</span>
-  </div>
-  <div class="legend-item">
-    <div class="legend-dot" style="background:#f0f0f0;color:#aaa;font-size:10px">休</div><span>休業日</span>
-  </div>
+<div class="legend" id="legend" style="display:none">
+  <div class="legend-item"><span class="legend-mark" style="color:var(--open-text)">○</span><span>空きあり</span></div>
+  <div class="legend-item"><span class="legend-mark" style="color:#e6a817">△</span><span>残りわずか</span></div>
+  <div class="legend-item"><span class="legend-mark" style="color:var(--full-text)">×</span><span>満枠</span></div>
+  <div class="legend-item"><span class="legend-mark" style="color:#ccc;font-size:12px">－</span><span>受付終了</span></div>
+</div>
+
+<!-- 受付時間外画面 -->
+<div class="outside-screen" id="outsideScreen">
+  <div class="outside-icon">🌙</div>
+  <h2>受付時間外です</h2>
+  <div class="next-open-badge" id="nextOpenBadge"></div>
+  <p>受付時間：毎日 7:00〜23:00<br>時間内に再度お越しください。</p>
 </div>
 
 <!-- 下部スライドパネル -->
@@ -249,28 +243,26 @@
   <div class="selected-badge" id="selectedBadge"></div>
   <div class="panel-body">
 
-    <!-- 人数選択 -->
+    <!-- 満枠時の案内 -->
+    <div class="full-notice" id="fullNotice" style="display:none">
+      この時間は満枠です。<br>プロモーションコードをお持ちの方のみ予約できます。
+    </div>
+
+    <!-- 氏名 -->
     <div>
-      <div class="field-label">👥 人数 <span class="req">必須</span></div>
-      <div class="btn-row" id="countBtns"></div>
+      <div class="field-label">👤 お名前 <span class="req">必須</span></div>
+      <input type="text" class="text-input" id="inputName"
+        placeholder="例：山田 太郎"
+        oninput="validateForm()">
     </div>
 
-    <!-- 氏名（人数分） -->
-    <div id="nameFields">
-      <div class="field-label">👤 氏名 <span class="req">必須</span></div>
-      <div id="nameInputs"></div>
-    </div>
-
-    <!-- 施術メニュー -->
+    <!-- プロモーションコード -->
     <div>
-      <div class="field-label">🩹 施術メニュー <span class="req">必須</span></div>
-      <div class="btn-row" id="menuBtns"></div>
-    </div>
-
-    <!-- 症状（メニュー選択後に表示） -->
-    <div id="conditionArea" style="display:none">
-      <div class="field-label">💬 現在の症状 <span class="req">必須</span></div>
-      <div class="btn-row" id="conditionBtns"></div>
+      <div class="field-label">🎟️ プロモーションコード <span class="opt">任意</span></div>
+      <input type="text" class="text-input" id="inputPromo"
+        placeholder="お持ちの方は入力してください"
+        oninput="onPromoInput()">
+      <div class="promo-hint" id="promoHint"></div>
     </div>
 
     <!-- 予約ボタン -->
@@ -293,43 +285,31 @@
 // ============================================================
 // 設定
 // ============================================================
-const GAS_URL      = 'https://script.google.com/macros/s/AKfycbw-JsEZlCOe6FeItSrj18jK2hOx84rRzSBqpLId6eyDH5--pgEkxJiPWsx09ln82wMf/exec';
-const LIFF_ID      = '2010369051-b9OGqRDi';
-const MAX_PER_SLOT = 5;
-const SLOT_MIN     = 60;
-const DAY_START    = 9;
-const DAY_END      = 24;
-let CLOSED_DAYS    = []; // 設定シートから動的に読み込む
-let HOLIDAY_DATES  = []; // 臨時休業日
-const DAY_NAMES    = ['日','月','火','水','木','金','土'];
+const GAS_URL        = 'https://script.google.com/macros/s/AKfycbw-JsEZlCOe6FeItSrj18jK2hOx84rRzSBqpLId6eyDH5--pgEkxJiPWsx09ln82wMf/exec';
+const LIFF_ID        = '2010369051-b9OGqRDi';
+const MAX_PER_SLOT   = 5;
+const SLOT_MIN       = 60; // 1時間刻み
+const HOUR_OPEN      = 7;  // 受付開始（この時間から予約できる）
+const HOUR_CLOSE     = 23; // 受付終了（この時間以降は受付時間外）
+const DAY_START      = 9;  // 営業開始（予約枠の最初）
+const DAY_END        = 24; // 営業終了（予約枠の最後は23:00〜24:00）
+const WARN_THRESHOLD = 2;  // 残り△表示の閾値
+// 有効なプロモーションコード（定員オーバー時も予約可能）
+const PROMO_CODES    = ['事故', '即'];
 
-// 施術メニュー（ここを編集して追加できます）
-const MENUS = [
-  {
-    id: 'normal',
-    icon: '🩹',
-    label: '通常施術',
-    conditions: [
-      { id: 'better', icon: '😊', label: '良くなっている' },
-      { id: 'same',   icon: '😐', label: '変わらない'     },
-      { id: 'worse',  icon: '😟', label: '悪化している'   },
-    ]
-  },
-  // 追加例:
-  // { id: 'initial', icon: '📋', label: '初診', conditions: [...] },
-];
+const DAY_NAMES = ['日','月','火','水','木','金','土'];
 
-// ============================================================
-// 状態
-// ============================================================
-let weekOffset   = 0;
 let userId       = null;
-let slotsCache   = {};
+let slotsData    = {};
 let selectedDate = null;
 let selectedTime = null;
-let activeBtn    = null; // 選択中のカレンダーセル
-let formData     = { names: [''], menuId: '', conditionId: '' };
-let selectedCount = 1;
+let selectedItem = null; // 選択中のDOM要素
+let promoValid   = false;
+let CLOSED_DAYS  = [];
+let HOLIDAY_DATES = [];
+let closedSlots  = {};   // 受付終了に設定された時間 { 'yyyy-MM-dd': ['10:00', ...] }
+let limitsData   = {};   // 枠ごとの上限（上限設定シート） { 'yyyy-MM-dd': { '10:00': 5, ... } }
+let selectedFull = false; // 選択中の枠が満枠か
 
 // ============================================================
 // 初期化
@@ -342,242 +322,193 @@ async function init() {
       userId = p.userId;
     } else { liff.login(); return; }
   } catch(e) { userId = 'TEST_USER'; }
-  // 設定シートから定休日と臨時休業日を読み込む
-  try {
-    const res  = await fetch(`${GAS_URL}?action=getSettings&userId=${userId}`);
-    const data = await res.json();
-    if (data.closed_days !== undefined) {
-      const val = String(data.closed_days).trim();
-      CLOSED_DAYS = val ? val.split(',').map(Number).filter(n => !isNaN(n)) : [];
-    }
-    if (data.holiday_dates) {
-      HOLIDAY_DATES = String(data.holiday_dates).split(',').map(s => s.trim()).filter(s => s);
-    }
-  } catch(e) {}
 
-  await loadWeek();
+  // 受付時間チェック
+  const now  = new Date();
+  const hour = now.getHours();
+  if (hour < HOUR_OPEN || hour >= HOUR_CLOSE) {
+    showOutsideScreen();
+    return;
+  }
+
+  updateHeaderDate(now);
+  await loadTodaySlots();
 }
 
-async function changeWeek(dir) {
-  weekOffset += dir;
-  document.getElementById('prevWeek').disabled = (weekOffset <= 0);
-  await loadWeek();
+function showOutsideScreen() {
+  const now = new Date();
+  const hour = now.getHours();
+  let msg;
+  if (hour >= HOUR_CLOSE) {
+    msg = `次の受付開始：翌朝 ${HOUR_OPEN}:00`;
+  } else {
+    msg = `本日の受付開始：${HOUR_OPEN}:00`;
+  }
+  document.getElementById('nextOpenBadge').textContent = '🕐 ' + msg;
+  document.getElementById('outsideScreen').classList.add('open');
+}
+
+function updateHeaderDate(now) {
+  const month = now.getMonth() + 1;
+  const day   = now.getDate();
+  const dname = DAY_NAMES[now.getDay()];
+  document.getElementById('headerDate').textContent = `${month}/${day}（${dname}）`;
 }
 
 // ============================================================
-// データ取得
+// 当日スロット取得・表示
 // ============================================================
-async function loadWeek() {
-  document.getElementById('calendarBody').innerHTML =
+async function loadTodaySlots() {
+  document.getElementById('mainContent').innerHTML =
     '<div class="loading"><div class="spinner"></div> 読み込み中…</div>';
-  const dates = getWeekDates(weekOffset);
-  updateWeekLabel(dates);
+
+  const today = formatDate(new Date());
   try {
-    const ds = dates.map(d => formatDate(d));
-    const res = await fetch(`${GAS_URL}?action=getSlots&dates=${ds.join(',')}&userId=${userId}`);
+    const res  = await fetch(`${GAS_URL}?action=getSlots&dates=${today}&userId=${userId}`);
     const data = await res.json();
-    slotsCache  = data.slots || {};
-    limitsCache = data.limits || {};
-  } catch(e) { slotsCache = generateDummySlots(getWeekDates(weekOffset)); }
-  renderCalendar(getWeekDates(weekOffset), slotsCache);
+    slotsData     = data.slots || {};
+    closedSlots   = data.closed || {};
+    CLOSED_DAYS   = Array.isArray(data.closedDays) ? data.closedDays.map(Number) : [];
+    HOLIDAY_DATES = data.holiday_dates ? String(data.holiday_dates).split(',').map(s => s.trim()).filter(s => s) : [];
+    limitsData    = data.limits || {};
+  } catch(e) {
+    slotsData = {};
+  }
+
+  renderTodaySlots(today);
+  document.getElementById('legend').style.display = 'flex';
 }
 
-function getWeekDates(offset) {
-  const today = new Date();
-  return Array.from({length:7}, (_,i) => {
-    const d = new Date(today); d.setDate(today.getDate() + offset*7 + i); return d;
-  });
-}
-function updateWeekLabel(dates) {
-  const s = dates[0], e = dates[6];
-  document.getElementById('weekLabel').textContent =
-    `${s.getMonth()+1}/${s.getDate()} 〜 ${e.getMonth()+1}/${e.getDate()}`;
-}
+function renderTodaySlots(today) {
+  const now    = new Date();
+  const todayDate = new Date(today + 'T00:00:00');
+  const month  = todayDate.getMonth() + 1;
+  const day    = todayDate.getDate();
+  const dname  = DAY_NAMES[todayDate.getDay()];
 
-// ============================================================
-// カレンダー描画
-// ============================================================
-function renderCalendar(dates, slots) {
-  const slotList = generateTimeSlots();
-  const today    = formatDate(new Date());
-  let html = '<table><thead><tr><th class="time-col">時刻</th>';
-  dates.forEach(d => {
-    const ds  = formatDate(d);
-    const isHol = HOLIDAY_DATES.includes(ds);
-    const cls = (CLOSED_DAYS.includes(d.getDay()) || isHol) ? 'closed-col' : (ds===today ? 'today-col' : '');
-    html += `<th class="${cls}"><span class="day-num">${d.getDate()}</span><span class="day-name">${DAY_NAMES[d.getDay()]}</span></th>`;
+  const isClosed  = CLOSED_DAYS.includes(todayDate.getDay());
+  const isHoliday = HOLIDAY_DATES.includes(today);
+
+  let html = '<div class="slots-wrap">';
+
+  // 日付ヘッダー
+  html += `<div class="date-header">
+    <div>
+      <div class="date-header-main">📅 ${month}月${day}日（${dname}）</div>
+      <div class="date-header-sub">本日の予約受付</div>
+    </div>
+  </div>`;
+
+  // 休業日
+  if (isClosed || isHoliday) {
+    html += `<div class="reception-closed-notice">🏖️ 本日は休業日です</div>`;
+    html += '</div>';
+    document.getElementById('mainContent').innerHTML = html;
+    return;
+  }
+
+  // スロット一覧
+  html += '<div class="slots-grid">';
+  const slots = generateTimeSlots();
+  slots.forEach(time => {
+    // 枠の終了時刻を過ぎたら受付終了（現在進行中の時間帯はまだ予約可能）
+    const endDt  = new Date(today + 'T' + calcEndTime(time) + ':00');
+    const isPast = endDt <= now;
+    const limit  = limitsData[today]?.[time] ?? MAX_PER_SLOT;
+    // 上限0の枠も受付不可として扱う
+    const isClosedSlot = (closedSlots[today] || []).includes(time) || limit === 0;
+    const count  = slotsData[today]?.[time] ?? 0;
+    // サーバーは満枠の枠のcountをMAX_PER_SLOTにして返す
+    const remaining = count >= MAX_PER_SLOT ? 0 : Math.max(0, limit - count);
+
+    let cls, markCls, mark;
+    if (isPast) {
+      cls = 'past'; markCls = 'mark-past'; mark = '－';
+    } else if (isClosedSlot) {
+      cls = 'closed-slot'; markCls = 'mark-closed'; mark = '受付終了';
+    } else if (remaining <= 0) {
+      cls = 'full'; markCls = 'mark-full'; mark = '×';
+    } else if (remaining <= WARN_THRESHOLD) {
+      cls = 'warn'; markCls = 'mark-warn'; mark = '△';
+    } else {
+      cls = 'open'; markCls = 'mark-open'; mark = '○';
+    }
+
+    // 満枠でもタップ可能（プロモーションコード入力時のみ予約できる）
+    const canSelect = !isPast && !isClosedSlot;
+    const endTime   = calcEndTime(time);
+    const onclick   = canSelect ? `onclick="selectSlot('${today}','${time}',${remaining <= 0},this)"` : '';
+
+    html += `<div class="slot-item ${cls}" ${onclick} data-date="${today}" data-time="${time}">
+      <div class="slot-time">${time}〜${endTime}</div>
+      <div class="slot-mark ${markCls}">${mark}</div>
+      ${(cls === 'open' || cls === 'warn') ? `<div style="font-size:11px;color:var(--sub)">残り${remaining}枠</div>` : ''}
+    </div>`;
   });
-  html += '</tr></thead><tbody>';
-  slotList.forEach(time => {
-    html += `<tr><td class="time-cell">${time}</td>`;
-    dates.forEach(d => {
-      const ds      = formatDate(d);
-      const isClosed  = CLOSED_DAYS.includes(d.getDay());
-      const isHoliday = HOLIDAY_DATES.includes(ds);
-      const isPast   = isPastSlot(d, time);
-      const isToday  = ds === today;
-      const isActive = (ds === selectedDate && time === selectedTime);
-      if (isClosed || isHoliday) { html += `<td class="slot-cell closed-day"><span class="closed-label">${'休'}</span></td>`; return; }
-      const count     = (slots[ds]?.[time] ?? 0);
-      const limit     = limitsCache[ds]?.[time] ?? MAX_PER_SLOT;
-      const remaining = limit - count;
-      const tc = (isToday ? ' today-cell' : '') + (isActive ? ' selected-slot' : '');
-      if (isPast || remaining <= 0) {
-        html += `<td class="slot-cell${tc}"><button class="slot-btn ${isPast?'slot-closed':'slot-full'}" disabled>${isPast?'－':'×'}</button></td>`;
-      } else {
-        const ac = isActive ? ' active' : '';
-        html += `<td class="slot-cell${tc}" id="cell-${ds}-${time}">
-          <button class="slot-btn slot-open${ac}" onclick="selectSlot('${ds}','${time}',${remaining},this)">○</button>
-        </td>`;
-      }
-    });
-    html += '</tr>';
-  });
-  html += '</tbody></table>';
-  document.getElementById('calendarBody').innerHTML = html;
+  html += '</div></div>';
+
+  document.getElementById('mainContent').innerHTML = html;
 }
 
 function generateTimeSlots() {
-  return Array.from({length: DAY_END - DAY_START}, (_,i) =>
-    `${String(DAY_START+i).padStart(2,'0')}:00`);
-}
-function isPastSlot(date, time) {
-  const now = new Date();
-  const d = new Date(date); d.setHours(parseInt(time),0,0,0);
-  return d <= now;
+  const slots = [];
+  for (let h = DAY_START; h < DAY_END; h++) {
+    slots.push(`${String(h).padStart(2,'0')}:00`);
+  }
+  return slots;
 }
 
 // ============================================================
 // 枠選択 → パネル表示
 // ============================================================
-function selectSlot(date, time, remaining, btn) {
+function selectSlot(date, time, isFull, el) {
   // 以前の選択を解除
-  if (activeBtn && activeBtn !== btn) activeBtn.classList.remove('active');
-  activeBtn = btn;
-  btn.classList.add('active');
+  if (selectedItem && selectedItem !== el) selectedItem.classList.remove('selected');
+  selectedItem = el;
+  el.classList.add('selected');
 
   selectedDate = date;
   selectedTime = time;
-  formData.names = [''];
-  formData.menuId = '';
-  formData.conditionId = '';
-  selectedCount = 1;
+  selectedFull = !!isFull;
+  document.getElementById('fullNotice').style.display = selectedFull ? '' : 'none';
 
-  const d = new Date(date);
+  const d = new Date(date + 'T00:00:00');
   document.getElementById('selectedBadge').textContent =
-    `📅 ${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}） 　🕐 ${time}〜${calcEndTime(time)}`;
+    `📅 ${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）　🕐 ${time}〜${calcEndTime(time)}`;
 
-  renderCountBtns();
-  renderNameInputs();
-  renderMenuBtns();
-  document.getElementById('conditionArea').style.display = 'none';
-
+  // フォームリセット
+  document.getElementById('inputName').value  = '';
+  document.getElementById('inputPromo').value = '';
+  document.getElementById('promoHint').textContent = '';
+  promoValid = false;
   validateForm();
+
   document.getElementById('bookingPanel').classList.add('open');
+  setTimeout(() => document.getElementById('inputName').focus(), 350);
 }
 
 function closePanel() {
   document.getElementById('bookingPanel').classList.remove('open');
-  if (activeBtn) { activeBtn.classList.remove('active'); activeBtn = null; }
+  if (selectedItem) { selectedItem.classList.remove('selected'); selectedItem = null; }
   selectedDate = null; selectedTime = null;
 }
 
 // ============================================================
-// 人数・氏名入力
+// プロモーションコード
 // ============================================================
-function renderCountBtns() {
-  const current   = slotsCache[selectedDate]?.[selectedTime] ?? 0;
-  const limit     = limitsCache[selectedDate]?.[selectedTime] ?? MAX_PER_SLOT;
-  const remaining = Math.max(0, limit - current);
-  const max       = Math.min(remaining, 3);
-
-  if (max === 0) {
-    document.getElementById('countBtns').innerHTML = '<span style="color:#e74c3c;font-size:13px">この枠は満枠です</span>';
-    return;
+function onPromoInput() {
+  const val  = document.getElementById('inputPromo').value.trim();
+  const hint = document.getElementById('promoHint');
+  if (!val) {
+    hint.textContent = '';
+    promoValid = false;
+  } else if (PROMO_CODES.includes(val)) {
+    hint.innerHTML = '<span class="promo-ok">✅ 有効なコードです</span>';
+    promoValid = true;
+  } else {
+    hint.textContent = '❌ 無効なコードです';
+    promoValid = false;
   }
-
-  document.getElementById('countBtns').innerHTML = Array.from({length: max}, (_,i) => `
-    <button class="count-btn ${selectedCount===i+1?'selected':''}" onclick="selectCount(${i+1})">${i+1}</button>
-  `).join('');
-
-  if (selectedCount > max) {
-    selectedCount = 1;
-    formData.names = [''];
-    renderNameInputs();
-  }
-}
-
-function selectCount(n) {
-  selectedCount = n;
-  formData.names = Array.from({length: n}, (_,i) => formData.names[i] || '');
-  renderCountBtns();
-  renderNameInputs();
-  validateForm();
-}
-
-function renderNameInputs() {
-  document.getElementById('nameInputs').innerHTML = Array.from({length: selectedCount}, (_,i) => `
-    <div class="name-input-row">
-      <span class="name-label">${i+1}人目</span>
-      <input type="text" class="text-input" id="inputName${i}"
-        placeholder="例：山田 太郎"
-        value="${formData.names[i] || ''}"
-        oninput="updateName(${i})"
-        style="flex:1">
-    </div>
-  `).join('');
-}
-
-function updateName(i) {
-  formData.names[i] = document.getElementById(`inputName${i}`).value;
-  validateForm();
-}
-
-function getNameValues() {
-  return Array.from({length: selectedCount}, (_,i) => {
-    const el = document.getElementById(`inputName${i}`);
-    return el ? el.value.trim() : (formData.names[i] || '');
-  });
-}
-
-// ============================================================
-// メニューボタン描画
-// ============================================================
-function renderMenuBtns() {
-  document.getElementById('menuBtns').innerHTML = MENUS.map(m => `
-    <button class="sel-btn ${formData.menuId===m.id?'selected':''}" onclick="selectMenu('${m.id}')">
-      <span class="sb-icon">${m.icon}</span>
-      <span class="sb-label">${m.label}</span>
-    </button>
-  `).join('');
-}
-
-function selectMenu(id) {
-  formData.menuId = id;
-  formData.conditionId = '';
-  renderMenuBtns();
-  renderConditionBtns();
-  document.getElementById('conditionArea').style.display = '';
-  validateForm();
-}
-
-// ============================================================
-// 症状ボタン描画
-// ============================================================
-function renderConditionBtns() {
-  const menu = MENUS.find(m => m.id === formData.menuId);
-  if (!menu) return;
-  document.getElementById('conditionBtns').innerHTML = menu.conditions.map(c => `
-    <button class="sel-btn ${formData.conditionId===c.id?'selected':''}" onclick="selectCondition('${c.id}')">
-      <span class="sb-icon">${c.icon}</span>
-      <span class="sb-label">${c.label}</span>
-    </button>
-  `).join('');
-}
-
-function selectCondition(id) {
-  formData.conditionId = id;
-  renderConditionBtns();
   validateForm();
 }
 
@@ -585,33 +516,41 @@ function selectCondition(id) {
 // バリデーション
 // ============================================================
 function validateForm() {
-  formData.names = getNameValues();
-  const ok = formData.names.every(n => n.trim()) && formData.menuId && formData.conditionId;
-  document.getElementById('btnBook').disabled = !ok;
+  const name = document.getElementById('inputName').value.trim();
+  // 満枠の枠はコードが有効なときだけ予約できる
+  document.getElementById('btnBook').disabled = !name || (selectedFull && !promoValid);
 }
 
 // ============================================================
 // 予約送信
 // ============================================================
 async function submitBooking() {
-  const btn = document.getElementById('btnBook');
+  const btn  = document.getElementById('btnBook');
+  const name  = document.getElementById('inputName').value.trim().replace(/,/g, '、');
+  const promo = document.getElementById('inputPromo').value.trim();
+
+  if (!name) { showToast('お名前を入力してください'); return; }
+  if (selectedFull && !PROMO_CODES.includes(promo)) { showToast('満枠のためコードが必要です'); return; }
+
   btn.disabled = true; btn.textContent = '送信中…';
+
   try {
-    // 送信直前に最新の入力値を取得
-    const latestNames = getNameValues();
     const params = new URLSearchParams({
-      action: 'book', userId,
-      date: selectedDate, time: selectedTime,
-      names: latestNames.join(','), menuId: formData.menuId, conditionId: formData.conditionId,
+      action: 'book',
+      userId,
+      date: selectedDate,
+      time: selectedTime,
+      names: name,
+      promoCode: promo,
     });
     await fetch(`${GAS_URL}?${params.toString()}`, { mode: 'no-cors' });
-    // no-corsではレスポンスが読めないので2秒待ってからリロード
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // no-corsではレスポンス読めないので2秒待ってリロード
+    await new Promise(r => setTimeout(r, 2000));
     closePanel();
-    showDone({ id: '予約完了', date: selectedDate, time: selectedTime });
-    await loadWeek();
+    showDone({ date: selectedDate, time: selectedTime, name });
+    await loadTodaySlots();
   } catch(e) {
-    showToast('通信エラーが発生しました: ' + e.message);
+    showToast('通信エラーが発生しました');
     btn.disabled = false; btn.textContent = '予約を確定する';
   }
 }
@@ -619,18 +558,12 @@ async function submitBooking() {
 // ============================================================
 // 完了画面
 // ============================================================
-function showDone(r) {
-  const d    = new Date(r.date);
-  const time = r.time || selectedTime;
-  const menu = MENUS.find(m => m.id === formData.menuId);
-  const cond = menu?.conditions.find(c => c.id === formData.conditionId);
+function showDone({ date, time, name }) {
+  const d = new Date(date + 'T00:00:00');
   document.getElementById('doneDetail').innerHTML = `
     <p>📅 <span>${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）</span></p>
-    <p>🕐 <span>${time}〜${time ? calcEndTime(time) : ''}</span></p>
-    <p>👤 <span>${formData.names.join('・')} 様（${formData.names.length}名）</span></p>
-    <p>🩹 <span>${menu?.label || ''}</span></p>
-    <p>💬 <span>${cond?.label || ''}</span></p>
-
+    <p>🕐 <span>${time}〜${calcEndTime(time)}</span></p>
+    <p>👤 <span>${name} 様</span></p>
   `;
   document.getElementById('doneScreen').classList.add('open');
 }
@@ -655,14 +588,6 @@ function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3000);
-}
-function generateDummySlots(dates) {
-  const r = {};
-  dates.forEach(d => {
-    const ds = formatDate(d); r[ds] = {};
-    generateTimeSlots().forEach(t => { r[ds][t] = Math.floor(Math.random()*6); });
-  });
-  return r;
 }
 
 init();
