@@ -200,6 +200,12 @@
   .menu-opt .mo-icon { font-size: 18px; }
   textarea.text-input { resize: none; line-height: 1.5; }
 
+  /* 予約内容の確認 */
+  .confirm-list { display: flex; flex-direction: column; gap: 6px; }
+  .confirm-row { display: flex; gap: 10px; font-size: 14px; padding: 8px 10px; background: #f9f9f9; border-radius: 6px; }
+  .confirm-row .cr-key { width: 64px; flex-shrink: 0; color: var(--sub); font-size: 12px; padding-top: 1px; }
+  .confirm-row .cr-val { font-weight: 700; white-space: pre-wrap; word-break: break-all; }
+
   /* 予約ボタン */
   .btn-book {
     width: 100%; background: var(--teal); color: #fff; border: none;
@@ -270,6 +276,17 @@
       <div class="promo-hint" id="promoHint"></div>
     </div>
 
+    <div>
+      <div class="field-label">🩹 施術内容 <span class="req">必須</span></div>
+      <div class="menu-list" id="menuList"></div>
+    </div>
+
+    <div>
+      <div class="field-label">💬 コメント <span class="opt">任意</span></div>
+      <textarea class="text-input" id="inputComment" rows="3" maxlength="200"
+        placeholder="気になる症状などがあればご記入ください"></textarea>
+    </div>
+
     <button class="btn-book" id="btnNext" onclick="goSlots()" disabled>日時を選ぶ ›</button>
   </div>
 </div>
@@ -299,27 +316,17 @@
 <!-- 下部スライドパネル -->
 <div class="booking-panel" id="bookingPanel">
   <div class="panel-handle">
-    <h3>予約情報の入力</h3>
+    <h3>予約内容の確認</h3>
     <button class="panel-close" onclick="closePanel()">✕</button>
   </div>
   <div class="selected-badge" id="selectedBadge"></div>
   <div class="panel-body">
 
-    <!-- 施術内容 -->
-    <div>
-      <div class="field-label">🩹 施術内容 <span class="req">必須</span></div>
-      <div class="menu-list" id="menuList"></div>
-    </div>
-
-    <!-- コメント -->
-    <div>
-      <div class="field-label">💬 コメント <span class="opt">任意</span></div>
-      <textarea class="text-input" id="inputComment" rows="3" maxlength="200"
-        placeholder="気になる症状などがあればご記入ください"></textarea>
-    </div>
+    <!-- 入力内容の確認 -->
+    <div class="confirm-list" id="confirmList"></div>
 
     <!-- 予約ボタン -->
-    <button class="btn-book" id="btnBook" onclick="submitBooking()" disabled>予約を確定する</button>
+    <button class="btn-book" id="btnBook" onclick="submitBooking()">予約を確定する</button>
   </div>
 </div>
 
@@ -372,6 +379,7 @@ let limitsData   = {};   // 枠ごとの上限（上限設定シート） { 'yyy
 let selectedMenu  = '';   // 選択中の施術内容
 let userName     = '';   // ステップ1で入力した名前
 let promoCode    = '';   // ステップ1で入力したコード（有効な場合のみ保持）
+let userComment  = '';   // ステップ1で入力したコメント
 
 // ============================================================
 // 初期化
@@ -396,6 +404,7 @@ async function init() {
   updateHeaderDate(now);
   document.getElementById('mainContent').style.display = 'none';
   document.getElementById('stepInfo').style.display = '';
+  renderMenuList();
   await fetchSlots(); // 先に空き状況を読み込んでおく
 }
 
@@ -403,7 +412,9 @@ async function init() {
 function goSlots() {
   userName  = document.getElementById('inputName').value.trim().replace(/,/g, '、');
   promoCode = promoValid ? document.getElementById('inputPromo').value.trim() : '';
+  userComment = document.getElementById('inputComment').value.trim();
   if (!userName) { showToast('名前を入力してください'); return; }
+  if (!selectedMenu) { showToast('施術内容を選んでください'); return; }
   document.getElementById('stepInfo').style.display = 'none';
   document.getElementById('mainContent').style.display = '';
   renderTodaySlots(formatDate(new Date()));
@@ -575,11 +586,19 @@ function selectSlot(date, time, el) {
   document.getElementById('selectedBadge').textContent =
     `📅 ${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）　🕐 ${time}〜${calcEndTime(time)}`;
 
-  // フォームリセット（施術内容・コメントのみ）
-  document.getElementById('inputComment').value = '';
-  selectedMenu = '';
-  renderMenuList();
-  validateForm();
+  // 入力内容の確認表示
+  const menuLabel = MENUS.find(m => m.id === selectedMenu)?.label || '';
+  const rows = [
+    ['👤 名前', userName + ' 様'],
+    ['🩹 施術', menuLabel],
+  ];
+  if (userComment) rows.push(['💬 コメント', userComment]);
+  if (promoCode)   rows.push(['🎟️ コード', promoCode]);
+  document.getElementById('confirmList').innerHTML = rows.map(([k, v]) =>
+    `<div class="confirm-row"><span class="cr-key">${k}</span><span class="cr-val">${escapeHtml(v)}</span></div>`
+  ).join('');
+  const btn = document.getElementById('btnBook');
+  btn.disabled = false; btn.textContent = '予約を確定する';
 
   document.getElementById('bookingPanel').classList.add('open');
 }
@@ -612,15 +631,11 @@ function onPromoInput() {
 // ============================================================
 // バリデーション
 // ============================================================
-// ステップ1：名前が入っていて、コードは空欄か有効なとき次へ進める
+// ステップ1：名前と施術内容が入っていて、コードは空欄か有効なとき次へ進める
 function validateInfo() {
   const name  = document.getElementById('inputName').value.trim();
   const promo = document.getElementById('inputPromo').value.trim();
-  document.getElementById('btnNext').disabled = !name || (promo !== '' && !promoValid);
-}
-// 施術内容：選択済みなら予約できる
-function validateForm() {
-  document.getElementById('btnBook').disabled = !selectedMenu;
+  document.getElementById('btnNext').disabled = !name || !selectedMenu || (promo !== '' && !promoValid);
 }
 
 // ============================================================
@@ -637,7 +652,7 @@ function renderMenuList() {
 function selectMenu(id) {
   selectedMenu = id;
   renderMenuList();
-  validateForm();
+  validateInfo();
 }
 
 // ============================================================
@@ -647,7 +662,7 @@ async function submitBooking() {
   const btn  = document.getElementById('btnBook');
   const name    = userName;
   const promo   = promoCode;
-  const comment = document.getElementById('inputComment').value.trim();
+  const comment = userComment;
 
   if (!name) { showToast('名前を入力してください'); return; }
   if (!selectedMenu) { showToast('施術内容を選んでください'); return; }
