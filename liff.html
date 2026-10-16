@@ -87,7 +87,7 @@
     padding: 10px 12px; font-size: 12px; font-weight: 700; line-height: 1.6;
   }
   .slot-item.past { border-color: #e0e0e0; background: #f5f5f5; cursor: default; opacity: .55; }
-  .slot-item.closed-slot { border-color: #e0e0e0; background: #f5f5f5; cursor: default; }
+  .slot-item.closed-slot { border-color: #e0e0e0; background: #f5f5f5; cursor: pointer; }
   .slot-item.selected { background: var(--teal-light); border-color: var(--teal); box-shadow: 0 0 0 3px rgba(42,122,111,.2); }
 
   .slot-time { font-size: 15px; font-weight: 700; color: var(--text); }
@@ -162,6 +162,20 @@
 
   .promo-hint { font-size: 11px; color: var(--sub); margin-top: 4px; }
   .promo-ok { color: var(--teal); font-weight: 700; }
+
+  /* 施術内容の選択 */
+  .menu-list { display: flex; flex-direction: column; gap: 7px; }
+  .menu-opt {
+    display: flex; align-items: center; gap: 10px;
+    border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 11px 12px; cursor: pointer; background: #fff;
+    font-family: var(--font); font-size: 14px; font-weight: 700; text-align: left;
+    transition: all .15s;
+  }
+  .menu-opt:hover { border-color: var(--teal-mid); background: var(--teal-light); }
+  .menu-opt.selected { border-color: var(--teal); background: var(--teal-light); color: var(--teal); }
+  .menu-opt .mo-icon { font-size: 18px; }
+  textarea.text-input { resize: none; line-height: 1.5; }
 
   /* 予約ボタン */
   .btn-book {
@@ -243,14 +257,12 @@
   <div class="selected-badge" id="selectedBadge"></div>
   <div class="panel-body">
 
-    <!-- 満枠時の案内 -->
-    <div class="full-notice" id="fullNotice" style="display:none">
-      この時間は満枠です。<br>プロモーションコードをお持ちの方のみ予約できます。
-    </div>
+    <!-- 満枠・受付終了時の案内 -->
+    <div class="full-notice" id="fullNotice" style="display:none"></div>
 
     <!-- 氏名 -->
     <div>
-      <div class="field-label">👤 お名前 <span class="req">必須</span></div>
+      <div class="field-label">👤 名前 <span class="req">必須</span></div>
       <input type="text" class="text-input" id="inputName"
         placeholder="例：山田 太郎"
         oninput="validateForm()">
@@ -263,6 +275,19 @@
         placeholder="お持ちの方は入力してください"
         oninput="onPromoInput()">
       <div class="promo-hint" id="promoHint"></div>
+    </div>
+
+    <!-- 施術内容 -->
+    <div>
+      <div class="field-label">🩹 施術内容 <span class="req">必須</span></div>
+      <div class="menu-list" id="menuList"></div>
+    </div>
+
+    <!-- コメント -->
+    <div>
+      <div class="field-label">💬 コメント <span class="opt">任意</span></div>
+      <textarea class="text-input" id="inputComment" rows="3" maxlength="200"
+        placeholder="気になる症状などがあればご記入ください"></textarea>
     </div>
 
     <!-- 予約ボタン -->
@@ -294,8 +319,15 @@ const HOUR_CLOSE     = 23; // 受付終了（この時間以降は受付時間�
 const DAY_START      = 9;  // 営業開始（予約枠の最初）
 const DAY_END        = 24; // 営業終了（予約枠の最後は23:00〜24:00）
 const WARN_THRESHOLD = 2;  // 残り△表示の閾値
-// 有効なプロモーションコード（定員オーバー時も予約可能）
+// 有効なプロモーションコード（入力すると満枠・受付終了の枠にも予約できる）
 const PROMO_CODES    = ['事故', '即'];
+
+// 施術内容（ここを編集して追加できます）
+const MENUS = [
+  { id: 'normal',      icon: '🩹', label: '通常施術' },
+  { id: 'other_part',  icon: '📍', label: '前回とは違う部位' },
+  { id: 'maintenance', icon: '💆', label: 'メンテナンス' },
+];
 
 const DAY_NAMES = ['日','月','火','水','木','金','土'];
 
@@ -309,7 +341,8 @@ let CLOSED_DAYS  = [];
 let HOLIDAY_DATES = [];
 let closedSlots  = {};   // 受付終了に設定された時間 { 'yyyy-MM-dd': ['10:00', ...] }
 let limitsData   = {};   // 枠ごとの上限（上限設定シート） { 'yyyy-MM-dd': { '10:00': 5, ... } }
-let selectedFull = false; // 選択中の枠が満枠か
+let selectedBlock = '';   // 選択中の枠の状態: '' | 'full'(満枠) | 'closed'(受付終了)
+let selectedMenu  = '';   // 選択中の施術内容
 
 // ============================================================
 // 初期化
@@ -434,10 +467,11 @@ function renderTodaySlots(today) {
       cls = 'open'; markCls = 'mark-open'; mark = '○';
     }
 
-    // 満枠でもタップ可能（プロモーションコード入力時のみ予約できる）
-    const canSelect = !isPast && !isClosedSlot;
+    // 満枠・受付終了の枠もタップ可能（プロモーションコードが有効なときだけ予約できる）
+    const canSelect = !isPast;
+    const block     = isClosedSlot ? 'closed' : (remaining <= 0 ? 'full' : '');
     const endTime   = calcEndTime(time);
-    const onclick   = canSelect ? `onclick="selectSlot('${today}','${time}',${remaining <= 0},this)"` : '';
+    const onclick   = canSelect ? `onclick="selectSlot('${today}','${time}','${block}',this)"` : '';
 
     html += `<div class="slot-item ${cls}" ${onclick} data-date="${today}" data-time="${time}">
       <div class="slot-time">${time}〜${endTime}</div>
@@ -461,16 +495,23 @@ function generateTimeSlots() {
 // ============================================================
 // 枠選択 → パネル表示
 // ============================================================
-function selectSlot(date, time, isFull, el) {
+function selectSlot(date, time, block, el) {
   // 以前の選択を解除
   if (selectedItem && selectedItem !== el) selectedItem.classList.remove('selected');
   selectedItem = el;
   el.classList.add('selected');
 
-  selectedDate = date;
-  selectedTime = time;
-  selectedFull = !!isFull;
-  document.getElementById('fullNotice').style.display = selectedFull ? '' : 'none';
+  selectedDate  = date;
+  selectedTime  = time;
+  selectedBlock = block || '';
+  const notice = document.getElementById('fullNotice');
+  if (selectedBlock) {
+    const what = selectedBlock === 'closed' ? 'この時間は受付を終了しています。' : 'この時間は満枠です。';
+    notice.innerHTML = `${what}<br>プロモーションコードをお持ちの方のみ予約できます。`;
+    notice.style.display = '';
+  } else {
+    notice.style.display = 'none';
+  }
 
   const d = new Date(date + 'T00:00:00');
   document.getElementById('selectedBadge').textContent =
@@ -480,7 +521,10 @@ function selectSlot(date, time, isFull, el) {
   document.getElementById('inputName').value  = '';
   document.getElementById('inputPromo').value = '';
   document.getElementById('promoHint').textContent = '';
-  promoValid = false;
+  document.getElementById('inputComment').value = '';
+  promoValid   = false;
+  selectedMenu = '';
+  renderMenuList();
   validateForm();
 
   document.getElementById('bookingPanel').classList.add('open');
@@ -517,8 +561,26 @@ function onPromoInput() {
 // ============================================================
 function validateForm() {
   const name = document.getElementById('inputName').value.trim();
-  // 満枠の枠はコードが有効なときだけ予約できる
-  document.getElementById('btnBook').disabled = !name || (selectedFull && !promoValid);
+  // 満枠・受付終了の枠は、コードが有効なときだけ予約できる
+  document.getElementById('btnBook').disabled =
+    !name || !selectedMenu || (selectedBlock && !promoValid);
+}
+
+// ============================================================
+// 施術内容の選択
+// ============================================================
+function renderMenuList() {
+  document.getElementById('menuList').innerHTML = MENUS.map(m => `
+    <button type="button" class="menu-opt ${selectedMenu===m.id?'selected':''}" onclick="selectMenu('${m.id}')">
+      <span class="mo-icon">${m.icon}</span><span>${m.label}</span>
+    </button>
+  `).join('');
+}
+
+function selectMenu(id) {
+  selectedMenu = id;
+  renderMenuList();
+  validateForm();
 }
 
 // ============================================================
@@ -526,11 +588,13 @@ function validateForm() {
 // ============================================================
 async function submitBooking() {
   const btn  = document.getElementById('btnBook');
-  const name  = document.getElementById('inputName').value.trim().replace(/,/g, '、');
-  const promo = document.getElementById('inputPromo').value.trim();
+  const name    = document.getElementById('inputName').value.trim().replace(/,/g, '、');
+  const promo   = document.getElementById('inputPromo').value.trim();
+  const comment = document.getElementById('inputComment').value.trim();
 
-  if (!name) { showToast('お名前を入力してください'); return; }
-  if (selectedFull && !PROMO_CODES.includes(promo)) { showToast('満枠のためコードが必要です'); return; }
+  if (!name) { showToast('名前を入力してください'); return; }
+  if (!selectedMenu) { showToast('施術内容を選んでください'); return; }
+  if (selectedBlock && !PROMO_CODES.includes(promo)) { showToast('この枠はコードが必要です'); return; }
 
   btn.disabled = true; btn.textContent = '送信中…';
 
@@ -541,13 +605,17 @@ async function submitBooking() {
       date: selectedDate,
       time: selectedTime,
       names: name,
+      menuId: selectedMenu,
+      comment,
       promoCode: promo,
     });
     await fetch(`${GAS_URL}?${params.toString()}`, { mode: 'no-cors' });
     // no-corsではレスポンス読めないので2秒待ってリロード
     await new Promise(r => setTimeout(r, 2000));
+    const menuLabel = MENUS.find(m => m.id === selectedMenu)?.label || '';
+    const doneInfo  = { date: selectedDate, time: selectedTime, name, menuLabel, comment };
     closePanel();
-    showDone({ date: selectedDate, time: selectedTime, name });
+    showDone(doneInfo);
     await loadTodaySlots();
   } catch(e) {
     showToast('通信エラーが発生しました');
@@ -558,12 +626,14 @@ async function submitBooking() {
 // ============================================================
 // 完了画面
 // ============================================================
-function showDone({ date, time, name }) {
+function showDone({ date, time, name, menuLabel, comment }) {
   const d = new Date(date + 'T00:00:00');
   document.getElementById('doneDetail').innerHTML = `
     <p>📅 <span>${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）</span></p>
     <p>🕐 <span>${time}〜${calcEndTime(time)}</span></p>
-    <p>👤 <span>${name} 様</span></p>
+    <p>👤 <span>${escapeHtml(name)} 様</span></p>
+    <p>🩹 <span>${escapeHtml(menuLabel)}</span></p>
+    ${comment ? `<p>💬 <span>${escapeHtml(comment)}</span></p>` : ''}
   `;
   document.getElementById('doneScreen').classList.add('open');
 }
@@ -583,6 +653,9 @@ function calcEndTime(time) {
   const [h,m] = time.split(':').map(Number);
   const t = h*60+m+SLOT_MIN;
   return `${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`;
+}
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 }
 function showToast(msg) {
   const t = document.getElementById('toast');

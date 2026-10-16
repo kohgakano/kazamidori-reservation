@@ -274,7 +274,7 @@ const DAY_END       = 24;
 let   CLOSED_DAYS   = [];
 const DAY_NAMES     = ['日','月','火','水','木','金','土'];
 
-const MENU_LABELS = { normal: '通常施術' };
+const MENU_LABELS = { normal: '通常施術', other_part: '前回とは違う部位', maintenance: 'メンテナンス' };
 const COND_LABELS = {
   normal: { better: '😊 良くなっている', same: '😐 変わらない', worse: '😟 悪化している' }
 };
@@ -467,7 +467,8 @@ function renderDay(date) {
       const cards = reservations.map(r => `
         <div class="booking-card" onclick="showDetail('${r.id}')">
           <span class="card-name">👤 ${r.name || '未入力'}</span>
-          <span class="card-menu">${getMenuLabel(r.menuId)} / ${getCondLabel(r.menuId, r.conditionId)}</span>
+          <span class="card-menu">${menuLine(r)}</span>
+          ${r.comment ? `<span class="card-menu">💬 ${escapeHtml(r.comment)}</span>` : ''}
         </div>`).join('');
       html += `<div class="timeline-row">
         <div class="tl-time">${time}</div>
@@ -512,7 +513,7 @@ function showMultiList(date, time) {
           <div onclick="showDetail('${r.id}')" style="display:flex;align-items:center;justify-content:space-between;background:#f0f8f6;border:1.5px solid var(--teal-light);border-radius:6px;padding:10px 12px;cursor:pointer;">
             <div>
               <div style="font-size:14px;font-weight:700">${r.name || '未入力'}</div>
-              <div style="font-size:12px;color:var(--sub);margin-top:2px">${getMenuLabel(r.menuId)} / ${getCondLabel(r.menuId, r.conditionId)}</div>
+              <div style="font-size:12px;color:var(--sub);margin-top:2px">${menuLine(r)}${r.comment ? ' ／ 💬 ' + escapeHtml(r.comment) : ''}</div>
             </div>
             <span style="color:var(--teal);font-size:18px">›</span>
           </div>`).join('')}
@@ -529,7 +530,8 @@ function renderModal(r) {
     <div class="detail-row"><span class="detail-key">🕐 時間</span><span class="detail-val">${r.time}〜${calcEndTime(r.time)}</span></div>
     <div class="detail-row"><span class="detail-key">👤 氏名</span><span class="detail-val">${r.name || '未入力'}</span></div>
     <div class="detail-row"><span class="detail-key">🩹 施術</span><span class="detail-val">${getMenuLabel(r.menuId)}</span></div>
-    <div class="detail-row"><span class="detail-key">💬 症状</span><span class="detail-val">${getCondLabel(r.menuId, r.conditionId)}</span></div>
+    ${r.conditionId ? `<div class="detail-row"><span class="detail-key">💬 症状</span><span class="detail-val">${getCondLabel(r.menuId, r.conditionId)}</span></div>` : ''}
+    ${r.comment ? `<div class="detail-row"><span class="detail-key">💬 コメント</span><span class="detail-val" style="white-space:pre-wrap;word-break:break-all">${escapeHtml(r.comment)}</span></div>` : ''}
     <div class="detail-row"><span class="detail-key">状態</span><span class="detail-val"><span class="badge badge-confirmed">✅ 確定</span></span></div>`;
   document.getElementById('modalActions').innerHTML = `
     <button class="btn-cancel-booking" onclick="cancelFromAdmin('${r.id}')">❌ この予約をキャンセルする</button>`;
@@ -839,6 +841,13 @@ function calcEndTime(time) {
 }
 function formatDateJapanese(d) {
   return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）`;
+}
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+// 施術名（症状が空なら施術名だけ表示）
+function menuLine(r) {
+  return r.conditionId ? `${getMenuLabel(r.menuId)} / ${getCondLabel(r.menuId, r.conditionId)}` : getMenuLabel(r.menuId);
 }
 function getMenuLabel(id)            { return MENU_LABELS[id] || id || '－'; }
 function getCondLabel(menuId, condId){ return COND_LABELS[menuId]?.[condId] || condId || '－'; }
