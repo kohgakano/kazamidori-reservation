@@ -558,6 +558,7 @@ function openAdminBooking(date, time) {
   const d = new Date(date);
   document.getElementById('adminPanelBadge').textContent =
     `📅 ${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}） 　🕐 ${time}〜${calcEndTime(time)}`;
+  if (ADMIN_MENUS.length === 1) adminFormData.menuId = ADMIN_MENUS[0].id; // メニューが1つなら自動選択
   renderAdminMenuBtns();
   validateAdminForm();
   document.getElementById('adminBookingPanel').classList.add('open');
