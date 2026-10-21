@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ご予約</title>
+<title>当日受付</title>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <style>
   :root {
@@ -87,6 +87,9 @@
     padding: 10px 12px; font-size: 12px; font-weight: 700; line-height: 1.6;
   }
   .slot-item.past { border-color: #e0e0e0; background: #f5f5f5; cursor: default; opacity: .55; }
+  .slot-item.wait { border-color: #e6c35c; background: #fffaf0; }
+  .slot-mark.mark-wait { color: #b98a12; font-size: 18px; }
+  .wait-note { background:#fff6dd; border:1px solid #ecd48a; color:#7a5a00; border-radius:10px; padding:10px 12px; font-size:13px; line-height:1.6; margin-bottom:10px; }
   .slot-item.closed-slot { border-color: #e0e0e0; background: #f5f5f5; cursor: pointer; }
   .slot-item.selected { background: var(--teal-light); border-color: var(--teal); box-shadow: 0 0 0 3px rgba(42,122,111,.2); }
 
@@ -252,14 +255,14 @@
 <body>
 
 <header>
-  <h1>🏥 ご予約</h1>
+  <h1>🏥 当日受付</h1>
   <span class="today-label" id="headerDate"></span>
 </header>
 
 <!-- ステップ1：名前・プロモーションコード -->
 <div class="info-wrap" id="stepInfo" style="display:none">
   <div class="info-card">
-    <div class="info-title">ご予約の前に</div>
+    <div class="info-title">受付の前に</div>
 
     <div>
       <div class="field-label">👤 名前 <span class="req">必須</span></div>
@@ -301,6 +304,7 @@
 <div class="legend" id="legend" style="display:none">
   <div class="legend-item"><span class="legend-mark" style="color:var(--open-text)">○</span><span>空きあり</span></div>
   <div class="legend-item"><span class="legend-mark" style="color:#e6a817">△</span><span>残りわずか</span></div>
+  <div class="legend-item"><span class="legend-mark" style="color:#b98a12">待ち</span><span>待ち受付</span></div>
   <div class="legend-item"><span class="legend-mark" style="color:var(--full-text)">×</span><span>満枠</span></div>
   <div class="legend-item"><span class="legend-mark" style="color:#ccc;font-size:12px">－</span><span>受付終了</span></div>
 </div>
@@ -316,7 +320,7 @@
 <!-- 下部スライドパネル -->
 <div class="booking-panel" id="bookingPanel">
   <div class="panel-handle">
-    <h3>予約内容の確認</h3>
+    <h3>受付内容の確認</h3>
     <button class="panel-close" onclick="closePanel()">✕</button>
   </div>
   <div class="selected-badge" id="selectedBadge"></div>
@@ -325,17 +329,21 @@
     <!-- 入力内容の確認 -->
     <div class="confirm-list" id="confirmList"></div>
 
-    <!-- 予約ボタン -->
-    <button class="btn-book" id="btnBook" onclick="submitBooking()">予約を確定する</button>
+    <div class="wait-note" id="waitNote" style="display:none">
+      ⏳ 一般受付の枠が上限に達しているため、<b>待ち受付</b>となります。
+    </div>
+
+    <!-- 受付ボタン -->
+    <button class="btn-book" id="btnBook" onclick="submitBooking()">当日受付を確定する</button>
   </div>
 </div>
 
 <!-- 完了画面 -->
 <div class="done-screen" id="doneScreen">
   <div class="done-icon">✅</div>
-  <h2>予約完了！</h2>
+  <h2 id="doneTitle">当日受付完了！</h2>
   <div class="done-detail" id="doneDetail"></div>
-  <p>前日にリマインドをお送りします。</p>
+  <p id="doneNote">受付内容はLINEにもお送りします。</p>
   <button class="btn-close" onclick="closeDone()">閉じる</button>
 </div>
 
@@ -351,10 +359,19 @@ const MAX_PER_SLOT   = 5;
 const SLOT_MIN       = 60; // 1時間刻み
 const HOUR_OPEN      = 7;  // 受付開始（この時間から予約できる）
 const HOUR_CLOSE     = 23; // 受付終了（この時間以降は受付時間外）
-const DAY_START      = 9;  // 営業開始（予約枠の最初）
-const DAY_END        = 24; // 営業終了（予約枠の最後は23:00〜24:00）
+const MAX_TOTAL_DEFAULT = 8; // 1枠で受け付ける最大件数（プロモ・一般・待ちの合計）
+// 受付枠（サーバーの値を優先。取得できない場合のデフォルト）
+// 12:00〜13:30は昼休み。8:30はコード専用。13:30は30分枠。
+const DEFAULT_SLOT_DEFS = [
+  { time: '08:30', end: '09:00', promoOnly: true },
+  { time: '09:00' }, { time: '10:00' }, { time: '11:00' },
+  { time: '13:30', end: '14:00' },
+  { time: '14:00' }, { time: '15:00' }, { time: '16:00' }, { time: '17:00' },
+  { time: '18:00' }, { time: '19:00' }, { time: '20:00' }, { time: '21:00' },
+  { time: '22:00' },
+];
 const WARN_THRESHOLD = 2;  // 残り△表示の閾値
-// 有効なプロモーションコード（入力すると満枠・受付終了の枠にも予約できる）
+// 有効なプロモーションコード（入力すると上限を超えて受付できる。休みの枠は不可）
 const PROMO_CODES    = ['事故', '即'];
 
 // 施術内容（ここを編集して追加できます）
@@ -375,6 +392,9 @@ let promoValid   = false;
 let CLOSED_DAYS  = [];
 let HOLIDAY_DATES = [];
 let closedSlots  = {};   // 受付終了に設定された時間 { 'yyyy-MM-dd': ['10:00', ...] }
+let waitingData  = {};   // 待ち受付の件数 { 'yyyy-MM-dd': { '10:00': 1, ... } }
+let slotDefs     = DEFAULT_SLOT_DEFS;
+let maxTotal     = MAX_TOTAL_DEFAULT;
 let limitsData   = {};   // 枠ごとの上限（上限設定シート） { 'yyyy-MM-dd': { '10:00': 5, ... } }
 let selectedMenu  = '';   // 選択中の施術内容
 let userName     = '';   // ステップ1で入力した名前
@@ -463,6 +483,11 @@ async function fetchSlots() {
     CLOSED_DAYS   = Array.isArray(data.closedDays) ? data.closedDays.map(Number) : [];
     HOLIDAY_DATES = data.holiday_dates ? String(data.holiday_dates).split(',').map(s => s.trim()).filter(s => s) : [];
     limitsData    = data.limits || {};
+    waitingData   = data.waiting || {};
+    if (Array.isArray(data.slotDefs) && data.slotDefs.length) {
+      slotDefs = data.slotDefs.map(d => ({ time: d.time, end: d.endTime || d.end, promoOnly: !!d.promoOnly }));
+    }
+    if (data.maxTotal) maxTotal = Number(data.maxTotal);
   } catch(e) {
     slotsData = {};
   }
@@ -492,7 +517,7 @@ function renderTodaySlots(today) {
   html += `<div class="date-header">
     <div>
       <div class="date-header-main">📅 ${month}月${day}日（${dname}）</div>
-      <div class="date-header-sub">本日の予約受付</div>
+      <div class="date-header-sub">本日の当日受付</div>
     </div>
   </div>`;
 
@@ -500,7 +525,7 @@ function renderTodaySlots(today) {
   html += `<div class="user-bar">
     <div>
       <div class="ub-main">👤 ${escapeHtml(userName)} 様</div>
-      ${promoCode ? '<div class="ub-promo">🎟️ コード適用中（全ての時間で予約できます）</div>' : ''}
+      ${promoCode ? '<div class="ub-promo">🎟️ コード適用中（上限を超えて受付できます）</div>' : ''}
     </div>
     <button onclick="backToInfo()">‹ 入力に戻る</button>
   </div>`;
@@ -515,42 +540,45 @@ function renderTodaySlots(today) {
 
   // スロット一覧
   html += '<div class="slots-grid">';
-  const slots = generateTimeSlots();
-  slots.forEach(time => {
-    // 枠の終了時刻を過ぎたら受付終了（現在進行中の時間帯はまだ予約可能）
-    const endDt  = new Date(today + 'T' + calcEndTime(time) + ':00');
-    const isPast = endDt <= now;
-    const limit  = limitsData[today]?.[time] ?? MAX_PER_SLOT;
-    // 上限0の枠も受付不可として扱う
+  slotDefs.forEach(def => {
+    const time = def.time;
+    // 枠の終了時刻を過ぎたら受付終了（現在進行中の時間帯はまだ受付可能）
+    const endTime = calcEndTime(time);
+    const endDt   = new Date(today + 'T' + endTime + ':00');
+    const isPast  = endDt <= now;
+    const limit   = limitsData[today]?.[time] ?? MAX_PER_SLOT;   // プロモ＋一般の上限
+    const conf    = slotsData[today]?.[time] ?? 0;               // プロモ＋一般の受付済み
+    const wait    = waitingData[today]?.[time] ?? 0;             // 待ち受付
+    const total   = conf + wait;
+    // 休み：受付終了に設定された枠・上限0の枠は、コードがあっても受付不可
     const isClosedSlot = (closedSlots[today] || []).includes(time) || limit === 0;
-    const count  = slotsData[today]?.[time] ?? 0;
-    // サーバーは満枠の枠のcountをMAX_PER_SLOTにして返す
-    const remaining = count >= MAX_PER_SLOT ? 0 : Math.max(0, limit - count);
+    const isFullTotal  = total >= maxTotal;                       // 最大件数に到達
+    const remaining    = Math.max(0, limit - conf);               // 一般で受けられる残り
 
-    let cls, markCls, mark;
+    let cls, markCls, mark, sub = '', canSelect = false, isWait = false;
     if (isPast) {
       cls = 'past'; markCls = 'mark-past'; mark = '－';
-    } else if (promoCode) {
-      // 有効なコードがある場合は、満枠・受付終了の枠も含めて全て○
-      cls = 'open'; markCls = 'mark-open'; mark = '○';
     } else if (isClosedSlot) {
       cls = 'closed-slot'; markCls = 'mark-closed'; mark = '受付終了';
-    } else if (remaining <= 0) {
+    } else if (def.promoOnly && !promoCode) {
+      cls = 'closed-slot'; markCls = 'mark-closed'; mark = 'コード<br>専用';
+    } else if (isFullTotal) {
       cls = 'full'; markCls = 'mark-full'; mark = '×';
+    } else if (promoCode) {
+      cls = 'open'; markCls = 'mark-open'; mark = '○'; canSelect = true;
+      sub = '<div style="font-size:11px;color:var(--teal)">コード適用</div>';
+    } else if (remaining <= 0) {
+      cls = 'wait'; markCls = 'mark-wait'; mark = '待ち'; canSelect = true; isWait = true;
+      sub = '<div style="font-size:11px;color:#8a6d1d">待ち受付</div>';
     } else if (remaining <= WARN_THRESHOLD) {
-      cls = 'warn'; markCls = 'mark-warn'; mark = '△';
+      cls = 'warn'; markCls = 'mark-warn'; mark = '△'; canSelect = true;
+      sub = `<div style="font-size:11px;color:var(--sub)">残り${remaining}枠</div>`;
     } else {
-      cls = 'open'; markCls = 'mark-open'; mark = '○';
+      cls = 'open'; markCls = 'mark-open'; mark = '○'; canSelect = true;
+      sub = `<div style="font-size:11px;color:var(--sub)">残り${remaining}枠</div>`;
     }
 
-    // コードなし：空きのある枠のみ。コードあり：過ぎていない枠は全てタップ可能
-    const canSelect = !isPast && (promoCode || (!isClosedSlot && remaining > 0));
-    const endTime   = calcEndTime(time);
-    const onclick   = canSelect ? `onclick="selectSlot('${today}','${time}',this)"` : '';
-    const sub = promoCode
-      ? (isPast ? '' : '<div style="font-size:11px;color:var(--teal)">コード適用</div>')
-      : ((cls === 'open' || cls === 'warn') ? `<div style="font-size:11px;color:var(--sub)">残り${remaining}枠</div>` : '');
-
+    const onclick = canSelect ? `onclick="selectSlot('${today}','${time}',this,${isWait})"` : '';
     html += `<div class="slot-item ${cls}" ${onclick} data-date="${today}" data-time="${time}">
       <div class="slot-time">${time}〜${endTime}</div>
       <div class="slot-mark ${markCls}">${mark}</div>
@@ -563,17 +591,15 @@ function renderTodaySlots(today) {
 }
 
 function generateTimeSlots() {
-  const slots = [];
-  for (let h = DAY_START; h < DAY_END; h++) {
-    slots.push(`${String(h).padStart(2,'0')}:00`);
-  }
-  return slots;
+  return slotDefs.map(d => d.time);
 }
 
 // ============================================================
 // 枠選択 → パネル表示
 // ============================================================
-function selectSlot(date, time, el) {
+let selectedIsWait = false;
+function selectSlot(date, time, el, isWait) {
+  selectedIsWait = !!isWait;
   // 以前の選択を解除
   if (selectedItem && selectedItem !== el) selectedItem.classList.remove('selected');
   selectedItem = el;
@@ -598,7 +624,10 @@ function selectSlot(date, time, el) {
     `<div class="confirm-row"><span class="cr-key">${k}</span><span class="cr-val">${escapeHtml(v)}</span></div>`
   ).join('');
   const btn = document.getElementById('btnBook');
-  btn.disabled = false; btn.textContent = '予約を確定する';
+  btn.disabled = false;
+  btn.textContent = selectedIsWait ? '待ち受付で確定する' : '当日受付を確定する';
+  const wn = document.getElementById('waitNote');
+  wn.style.display = selectedIsWait ? '' : 'none';
 
   document.getElementById('bookingPanel').classList.add('open');
 }
@@ -619,7 +648,7 @@ function onPromoInput() {
     hint.textContent = '';
     promoValid = false;
   } else if (PROMO_CODES.includes(val)) {
-    hint.innerHTML = '<span class="promo-ok">✅ 有効なコードです（全ての時間で予約できます）</span>';
+    hint.innerHTML = '<span class="promo-ok">✅ 有効なコードです（上限を超えて受付できます。休みの枠は不可）</span>';
     promoValid = true;
   } else {
     hint.textContent = '❌ 無効なコードです（お持ちでない場合は空欄にしてください）';
@@ -656,7 +685,7 @@ function selectMenu(id) {
 }
 
 // ============================================================
-// 予約送信
+// 受付送信
 // ============================================================
 async function submitBooking() {
   const btn  = document.getElementById('btnBook');
@@ -684,20 +713,24 @@ async function submitBooking() {
     // no-corsではレスポンス読めないので2秒待ってリロード
     await new Promise(r => setTimeout(r, 2000));
     const menuLabel = MENUS.find(m => m.id === selectedMenu)?.label || '';
-    const doneInfo  = { date: selectedDate, time: selectedTime, name, menuLabel, comment };
+    const doneInfo  = { date: selectedDate, time: selectedTime, name, menuLabel, comment, isWait: selectedIsWait };
     closePanel();
     showDone(doneInfo);
     await loadTodaySlots();
   } catch(e) {
     showToast('通信エラーが発生しました');
-    btn.disabled = false; btn.textContent = '予約を確定する';
+    btn.disabled = false; btn.textContent = selectedIsWait ? '待ち受付で確定する' : '当日受付を確定する';
   }
 }
 
 // ============================================================
 // 完了画面
 // ============================================================
-function showDone({ date, time, name, menuLabel, comment }) {
+function showDone({ date, time, name, menuLabel, comment, isWait }) {
+  document.getElementById('doneTitle').textContent = isWait ? '待ち受付を承りました' : '当日受付完了！';
+  document.getElementById('doneNote').textContent  = isWait
+    ? '一般受付の枠が上限に達しているため、待ち受付となります。'
+    : '受付内容はLINEにもお送りします。';
   const d = new Date(date + 'T00:00:00');
   document.getElementById('doneDetail').innerHTML = `
     <p>📅 <span>${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）</span></p>
@@ -721,6 +754,8 @@ function formatDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function calcEndTime(time) {
+  const def = slotDefs.find(d => d.time === time);
+  if (def && def.end) return def.end;
   const [h,m] = time.split(':').map(Number);
   const t = h*60+m+SLOT_MIN;
   return `${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`;
