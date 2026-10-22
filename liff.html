@@ -330,7 +330,7 @@
     <div class="confirm-list" id="confirmList"></div>
 
     <div class="wait-note" id="waitNote" style="display:none">
-      ⏳ 一般受付の枠が上限に達しているため、<b>待ち受付</b>となります。
+      ⏳ 一般受付の上限に達しています。<b>待ち受付</b>しますか？
     </div>
 
     <!-- 受付ボタン -->
@@ -550,9 +550,10 @@ function renderTodaySlots(today) {
     const conf    = slotsData[today]?.[time] ?? 0;               // プロモ＋一般の受付済み
     const wait    = waitingData[today]?.[time] ?? 0;             // 待ち受付
     const total   = conf + wait;
-    // 休み：受付終了に設定された枠・上限0の枠は、コードがあっても受付不可
-    const isClosedSlot = (closedSlots[today] || []).includes(time) || limit === 0;
-    const isFullTotal  = total >= maxTotal;                       // 最大件数に到達
+    // 受付終了に設定された枠は、コードがあっても受付不可
+    const isClosedSlot = (closedSlots[today] || []).includes(time);
+    const isLimitZero  = limit === 0;                             // 上限0の枠（コードがあれば受付可）
+    const isFullTotal  = total >= maxTotal;                       // 最大件数に到達（コードがあれば受付可）
     const remaining    = Math.max(0, limit - conf);               // 一般で受けられる残り
 
     let cls, markCls, mark, sub = '', canSelect = false, isWait = false;
@@ -562,11 +563,14 @@ function renderTodaySlots(today) {
       cls = 'closed-slot'; markCls = 'mark-closed'; mark = '受付終了';
     } else if (def.promoOnly && !promoCode) {
       cls = 'closed-slot'; markCls = 'mark-closed'; mark = 'コード<br>専用';
-    } else if (isFullTotal) {
-      cls = 'full'; markCls = 'mark-full'; mark = '×';
     } else if (promoCode) {
+      // コードあり：受付終了以外は、上限・最大件数・上限0を超えて受付できる
       cls = 'open'; markCls = 'mark-open'; mark = '○'; canSelect = true;
       sub = '<div style="font-size:11px;color:var(--teal)">コード適用</div>';
+    } else if (isLimitZero) {
+      cls = 'closed-slot'; markCls = 'mark-closed'; mark = '受付終了';
+    } else if (isFullTotal) {
+      cls = 'full'; markCls = 'mark-full'; mark = '×';
     } else if (remaining <= 0) {
       cls = 'wait'; markCls = 'mark-wait'; mark = '待ち'; canSelect = true; isWait = true;
       sub = '<div style="font-size:11px;color:#8a6d1d">待ち受付</div>';
@@ -625,7 +629,7 @@ function selectSlot(date, time, el, isWait) {
   ).join('');
   const btn = document.getElementById('btnBook');
   btn.disabled = false;
-  btn.textContent = selectedIsWait ? '待ち受付で確定する' : '当日受付を確定する';
+  btn.textContent = selectedIsWait ? '待ち受付する' : '当日受付を確定する';
   const wn = document.getElementById('waitNote');
   wn.style.display = selectedIsWait ? '' : 'none';
 
@@ -648,7 +652,7 @@ function onPromoInput() {
     hint.textContent = '';
     promoValid = false;
   } else if (PROMO_CODES.includes(val)) {
-    hint.innerHTML = '<span class="promo-ok">✅ 有効なコードです（上限を超えて受付できます。休みの枠は不可）</span>';
+    hint.innerHTML = '<span class="promo-ok">✅ 有効なコードです（上限を超えて受付できます。受付終了・休業日は不可）</span>';
     promoValid = true;
   } else {
     hint.textContent = '❌ 無効なコードです（お持ちでない場合は空欄にしてください）';
@@ -719,7 +723,7 @@ async function submitBooking() {
     await loadTodaySlots();
   } catch(e) {
     showToast('通信エラーが発生しました');
-    btn.disabled = false; btn.textContent = selectedIsWait ? '待ち受付で確定する' : '当日受付を確定する';
+    btn.disabled = false; btn.textContent = selectedIsWait ? '待ち受付する' : '当日受付を確定する';
   }
 }
 
@@ -729,7 +733,7 @@ async function submitBooking() {
 function showDone({ date, time, name, menuLabel, comment, isWait }) {
   document.getElementById('doneTitle').textContent = isWait ? '待ち受付を承りました' : '当日受付完了！';
   document.getElementById('doneNote').textContent  = isWait
-    ? '一般受付の枠が上限に達しているため、待ち受付となります。'
+    ? '一般受付の上限に達しているため、待ち受付として承りました。'
     : '受付内容はLINEにもお送りします。';
   const d = new Date(date + 'T00:00:00');
   document.getElementById('doneDetail').innerHTML = `
