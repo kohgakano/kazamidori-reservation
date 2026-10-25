@@ -409,7 +409,14 @@ function renderWeek(dates) {
       const isBlocked    = reservations.some(r => r.status === 'blocked');
       const isClosed2    = reservations.some(r => r.status === 'closed');
 
-      if (isClosed || isHoliday) {
+      const offReal = (isClosed || isHoliday || isClosed2) ? reservations.filter(isRealRes) : [];
+      if (offReal.length) {
+        // 休みの日・枠に受付が入っている：受付を残したまま、目立つ色で「休」を表示
+        const click = offReal.length > 1 ? `showMultiList('${ds}','${time}')` : `showDetail('${offReal[0].id}')`;
+        html += `<td class="${isToday?'today-bg':''}"><div class="booking-cell" style="background:#c0392b;flex-direction:column;line-height:1.1" onclick="${click}">
+          <span style="font-size:9px;font-weight:700;color:#fff">⚠️休</span>
+          <span class="booking-name">${offReal.length > 1 ? offReal.length + '名' : escapeHtml(offReal[0].name || '未入力')}</span></div></td>`;
+      } else if (isClosed || isHoliday) {
         html += `<td class="closed-cell"><div class="blocked-label" style="color:#888888">休</div></td>`;
       } else if (isBlocked) {
         html += `<td class="blocked-cell"><div class="blocked-label">🔒</div></td>`;
@@ -463,7 +470,21 @@ function renderDay(date) {
     const isBlocked    = reservations.some(r => r.status === 'blocked');
     const isClosed2    = reservations.some(r => r.status === 'closed');
 
-    if (isClosed || isHoliday) {
+    const offReal = (isClosed || isHoliday || isClosed2) ? reservations.filter(isRealRes) : [];
+    if (offReal.length) {
+      const cardsOff = offReal.map(r => `
+        <div class="booking-card" style="border-left:4px solid #c0392b" onclick="showDetail('${r.id}')">
+          <span class="card-name">👤 ${escapeHtml(r.name || '未入力')}${r.status === 'waiting' ? '（待ち）' : ''}${r.ruleId ? ' 🔁' : ''}</span>
+          <span class="card-menu">${menuLine(r)}</span>
+        </div>`).join('');
+      html += `<div class="timeline-row">
+        <div class="tl-time">${time}</div>
+        <div class="tl-content">
+          <div style="color:#c0392b;font-size:12px;font-weight:700">⚠️ ${offReason(ds, time)}です（受付が入っています）</div>
+          ${cardsOff}
+        </div>
+      </div>`;
+    } else if (isClosed || isHoliday) {
       html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">休業日</div></div>`;
     } else if (isBlocked) {
       html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">🔒 ブロック済み</div></div>`;
@@ -505,7 +526,7 @@ function showDetail(reservationId) {
 }
 
 function showMultiList(date, time) {
-  const reservations = allSlots[date]?.[time] || [];
+  const reservations = (allSlots[date]?.[time] || []).filter(isRealRes);
   if (reservations.length === 0) return;
   const dateLabel = formatDateJapanese(new Date(date));
   const endTime   = calcEndTime(time);
@@ -538,6 +559,7 @@ function renderModal(r) {
     <div class="detail-row"><span class="detail-key">🩹 施術</span><span class="detail-val">${getMenuLabel(r.menuId)}</span></div>
     ${r.conditionId ? `<div class="detail-row"><span class="detail-key">💬 症状</span><span class="detail-val">${getCondLabel(r.menuId, r.conditionId)}</span></div>` : ''}
     ${r.comment ? `<div class="detail-row"><span class="detail-key">💬 コメント</span><span class="detail-val" style="white-space:pre-wrap;word-break:break-all">${escapeHtml(r.comment)}</span></div>` : ''}
+    ${offReason(r.date, r.time) ? `<div class="detail-row" style="background:#fdecea"><span class="detail-key" style="color:#c0392b">⚠️ 休み</span><span class="detail-val" style="color:#c0392b;font-weight:700">${offReason(r.date, r.time)}です。ご確認ください</span></div>` : ''}
     ${r.ruleId ? `<div class="detail-row"><span class="detail-key">🔁 毎週</span><span class="detail-val">毎週の受付から作成</span></div>` : ''}
     <div class="detail-row"><span class="detail-key">状態</span><span class="detail-val">${r.status === 'waiting' ? '<span class="badge" style="background:#fff3cd;color:#7a5a00">⏳ 待ち受付</span>' : '<span class="badge badge-confirmed">✅ 受付済み</span>'}</span></div>`;
   document.getElementById('modalActions').innerHTML = r.ruleId
@@ -901,6 +923,17 @@ function calcEndTime(time) {
 }
 function formatDateJapanese(d) {
   return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）`;
+}
+// 実際の受付（目印の休業日・受付終了などを除く）
+function isRealRes(r) { return r.status === 'confirmed' || r.status === 'waiting'; }
+// その枠が「休み」の理由（休みでなければ空文字）
+function offReason(ds, time) {
+  const list = allSlots[ds]?.[time] || [];
+  const dow  = new Date(ds + 'T00:00:00').getDay();
+  if (list.some(r => r.status === 'holiday')) return '休業日';
+  if (CLOSED_DAYS.includes(dow))              return '定休日';
+  if (list.some(r => r.status === 'closed'))  return '受付終了の枠';
+  return '';
 }
 // 受付済み・待ちの件数ラベル（例：3名＋待2）
 function countLabel(list) {
