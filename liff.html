@@ -89,6 +89,7 @@
   .slot-item.past { border-color: #e0e0e0; background: #f5f5f5; cursor: default; opacity: .55; }
   .slot-item.wait { border-color: #e6c35c; background: #fffaf0; }
   .slot-mark.mark-wait { color: #b98a12; font-size: 18px; }
+  .recur-note { background:#e8f4fb; border:1px solid #b9dcf0; color:#14597a; border-radius:10px; padding:10px 12px; font-size:13px; line-height:1.6; margin-bottom:10px; }
   .wait-note { background:#fff6dd; border:1px solid #ecd48a; color:#7a5a00; border-radius:10px; padding:10px 12px; font-size:13px; line-height:1.6; margin-bottom:10px; }
   .slot-item.closed-slot { border-color: #e0e0e0; background: #f5f5f5; cursor: pointer; }
   .slot-item.selected { background: var(--teal-light); border-color: var(--teal); box-shadow: 0 0 0 3px rgba(42,122,111,.2); }
@@ -329,6 +330,9 @@
     <!-- 入力内容の確認 -->
     <div class="confirm-list" id="confirmList"></div>
 
+    <div class="recur-note" id="recurNote" style="display:none">
+      🔁 この曜日・時間で<b>毎週</b>受付します。月末に「来月も続けますか？」をお送りします（何もしなければ継続）。
+    </div>
     <div class="wait-note" id="waitNote" style="display:none">
       ⏳ 一般受付の上限に達しています。<b>待ち受付</b>しますか？
     </div>
@@ -372,7 +376,8 @@ const DEFAULT_SLOT_DEFS = [
 ];
 const WARN_THRESHOLD = 2;  // 残り△表示の閾値
 // 有効なプロモーションコード（入力すると上限を超えて受付できる。休みの枠は不可）
-const PROMO_CODES    = ['事故', '即'];
+const RECURRING_CODE = '定期'; // 毎週の受付用コード（選んだ曜日・時間で毎週受付）
+const PROMO_CODES    = ['事故', '即', RECURRING_CODE];
 
 // 施術内容（ここを編集して追加できます）
 const MENUS = [
@@ -525,7 +530,7 @@ function renderTodaySlots(today) {
   html += `<div class="user-bar">
     <div>
       <div class="ub-main">👤 ${escapeHtml(userName)} 様</div>
-      ${promoCode ? '<div class="ub-promo">🎟️ コード適用中（上限を超えて受付できます）</div>' : ''}
+      ${promoCode === RECURRING_CODE ? '<div class="ub-promo">🔁 毎週受付（選んだ曜日・時間で毎週続きます）</div>' : (promoCode ? '<div class="ub-promo">🎟️ コード適用中（上限を超えて受付できます）</div>' : '')}
     </div>
     <button onclick="backToInfo()">‹ 入力に戻る</button>
   </div>`;
@@ -624,6 +629,8 @@ function selectSlot(date, time, el, isWait) {
   ];
   if (userComment) rows.push(['💬 コメント', userComment]);
   if (promoCode)   rows.push(['🎟️ コード', promoCode]);
+  if (promoCode === RECURRING_CODE) rows.push(['🔁 毎週', `${DAY_NAMES[d.getDay()]}曜 ${time}〜${calcEndTime(time)}`]);
+  document.getElementById('recurNote').style.display = (promoCode === RECURRING_CODE) ? '' : 'none';
   document.getElementById('confirmList').innerHTML = rows.map(([k, v]) =>
     `<div class="confirm-row"><span class="cr-key">${k}</span><span class="cr-val">${escapeHtml(v)}</span></div>`
   ).join('');
@@ -651,6 +658,9 @@ function onPromoInput() {
   if (!val) {
     hint.textContent = '';
     promoValid = false;
+  } else if (val === RECURRING_CODE) {
+    hint.innerHTML = '<span class="promo-ok">✅ 毎週用のコードです（選んだ曜日・時間で毎週受付します。月末に継続確認が届きます）</span>';
+    promoValid = true;
   } else if (PROMO_CODES.includes(val)) {
     hint.innerHTML = '<span class="promo-ok">✅ 有効なコードです（上限を超えて受付できます。受付終了・休業日は不可）</span>';
     promoValid = true;
@@ -717,7 +727,7 @@ async function submitBooking() {
     // no-corsではレスポンス読めないので2秒待ってリロード
     await new Promise(r => setTimeout(r, 2000));
     const menuLabel = MENUS.find(m => m.id === selectedMenu)?.label || '';
-    const doneInfo  = { date: selectedDate, time: selectedTime, name, menuLabel, comment, isWait: selectedIsWait };
+    const doneInfo  = { date: selectedDate, time: selectedTime, name, menuLabel, comment, isWait: selectedIsWait, isRecurring: promo === RECURRING_CODE };
     closePanel();
     showDone(doneInfo);
     await loadTodaySlots();
@@ -730,11 +740,11 @@ async function submitBooking() {
 // ============================================================
 // 完了画面
 // ============================================================
-function showDone({ date, time, name, menuLabel, comment, isWait }) {
+function showDone({ date, time, name, menuLabel, comment, isWait, isRecurring }) {
   document.getElementById('doneTitle').textContent = isWait ? '待ち受付を承りました' : '当日受付完了！';
   document.getElementById('doneNote').textContent  = isWait
     ? '一般受付の上限に達しているため、待ち受付として承りました。'
-    : '受付内容はLINEにもお送りします。';
+    : (isRecurring ? '毎週この曜日・時間で継続します。月末に継続確認をお送りします。' : '受付内容はLINEにもお送りします。');
   const d = new Date(date + 'T00:00:00');
   document.getElementById('doneDetail').innerHTML = `
     <p>📅 <span>${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）</span></p>
