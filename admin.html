@@ -195,6 +195,7 @@
     <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--border)">
       <button id="tabSettingsClosed" class="settings-tab-btn active" onclick="switchSettingsTab('closed')">定休日</button>
       <button id="tabSettingsLimits" class="settings-tab-btn inactive" onclick="switchSettingsTab('limits')">上限設定</button>
+      <button id="tabSettingsRecurring" class="settings-tab-btn inactive" onclick="switchSettingsTab('recurring')">毎週</button>
     </div>
     <div id="settingsTabClosed">
       <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text)">定休日</div>
@@ -203,6 +204,10 @@
         style="width:100%;background:var(--teal);color:#fff;border:none;border-radius:8px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:16px">
         保存する
       </button>
+    </div>
+    <div id="settingsTabRecurring" style="display:none">
+      <div style="font-size:12px;color:var(--sub);margin-bottom:10px;line-height:1.6">コード「定期」で受付した人の、毎週の受付です。毎月1日の朝に、その月の分がまとめて作られます。停止すると、明日以降の分も取り消されます。</div>
+      <div id="recurringList"><div class="loading"><div class="spinner"></div> 読み込み中…</div></div>
     </div>
     <div id="settingsTabLimits" style="display:none">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
@@ -429,7 +434,7 @@ function renderWeek(dates) {
           html += `<td class="${isToday?'today-bg':''}">
             <div style="display:flex;flex-direction:column;height:100%">
               <div class="booking-cell" style="flex:1" onclick="showDetail('${reservations[0].id}')">
-                <span class="booking-name">${names[0]}${reservations[0].status === 'waiting' ? ' ⏳' : ''}</span>
+                <span class="booking-name">${names[0]}${reservations[0].status === 'waiting' ? ' ⏳' : ''}${reservations[0].ruleId ? ' 🔁' : ''}</span>
               </div>
               <div style="background:#1a9e8a;height:10px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="openAdminBooking('${ds}','${time}')">
                 <span style="color:#fff;font-size:9px">＋</span>
@@ -467,7 +472,7 @@ function renderDay(date) {
     } else {
       const cards = reservations.map(r => `
         <div class="booking-card" onclick="showDetail('${r.id}')">
-          <span class="card-name">👤 ${r.name || '未入力'}${r.status === 'waiting' ? '（待ち）' : ''}</span>
+          <span class="card-name">👤 ${r.name || '未入力'}${r.status === 'waiting' ? '（待ち）' : ''}${r.ruleId ? ' 🔁' : ''}</span>
           <span class="card-menu">${menuLine(r)}</span>
           ${r.comment ? `<span class="card-menu">💬 ${escapeHtml(r.comment)}</span>` : ''}
         </div>`).join('');
@@ -513,7 +518,7 @@ function showMultiList(date, time) {
         ${reservations.map(r => `
           <div onclick="showDetail('${r.id}')" style="display:flex;align-items:center;justify-content:space-between;background:#f0f8f6;border:1.5px solid var(--teal-light);border-radius:6px;padding:10px 12px;cursor:pointer;">
             <div>
-              <div style="font-size:14px;font-weight:700">${r.name || '未入力'}${r.status === 'waiting' ? ' <span style="font-size:11px;color:#7a5a00;background:#fff3cd;border-radius:10px;padding:1px 6px">待ち</span>' : ''}</div>
+              <div style="font-size:14px;font-weight:700">${r.name || '未入力'}${r.ruleId ? ' 🔁' : ''}${r.status === 'waiting' ? ' <span style="font-size:11px;color:#7a5a00;background:#fff3cd;border-radius:10px;padding:1px 6px">待ち</span>' : ''}</div>
               <div style="font-size:12px;color:var(--sub);margin-top:2px">${menuLine(r)}${r.comment ? ' ／ 💬 ' + escapeHtml(r.comment) : ''}</div>
             </div>
             <span style="color:var(--teal);font-size:18px">›</span>
@@ -533,18 +538,24 @@ function renderModal(r) {
     <div class="detail-row"><span class="detail-key">🩹 施術</span><span class="detail-val">${getMenuLabel(r.menuId)}</span></div>
     ${r.conditionId ? `<div class="detail-row"><span class="detail-key">💬 症状</span><span class="detail-val">${getCondLabel(r.menuId, r.conditionId)}</span></div>` : ''}
     ${r.comment ? `<div class="detail-row"><span class="detail-key">💬 コメント</span><span class="detail-val" style="white-space:pre-wrap;word-break:break-all">${escapeHtml(r.comment)}</span></div>` : ''}
+    ${r.ruleId ? `<div class="detail-row"><span class="detail-key">🔁 毎週</span><span class="detail-val">毎週の受付から作成</span></div>` : ''}
     <div class="detail-row"><span class="detail-key">状態</span><span class="detail-val">${r.status === 'waiting' ? '<span class="badge" style="background:#fff3cd;color:#7a5a00">⏳ 待ち受付</span>' : '<span class="badge badge-confirmed">✅ 受付済み</span>'}</span></div>`;
-  document.getElementById('modalActions').innerHTML = `
-    <button class="btn-cancel-booking" onclick="cancelFromAdmin('${r.id}')">❌ この受付をキャンセルする</button>`;
+  document.getElementById('modalActions').innerHTML = r.ruleId
+    ? `<button class="btn-cancel-booking" onclick="cancelFromAdmin('${r.id}','one')">❌ この回だけキャンセルする</button>
+       <button class="btn-cancel-booking" style="margin-top:8px" onclick="cancelFromAdmin('${r.id}','series')">🛑 毎週ごと停止する（この回以降すべて）</button>`
+    : `<button class="btn-cancel-booking" onclick="cancelFromAdmin('${r.id}','one')">❌ この受付をキャンセルする</button>`;
 }
 
 function closeModal(e)      { if (e.target === document.getElementById('modalOverlay')) closeModalDirect(); }
 function closeModalDirect() { document.getElementById('modalOverlay').classList.remove('open'); }
 
-async function cancelFromAdmin(reservationId) {
-  if (!confirm('この受付をキャンセルしますか？\n（患者さんへのLINE通知も送られます）')) return;
+async function cancelFromAdmin(reservationId, scope) {
+  const msg = scope === 'series'
+    ? 'この回と、今後の毎週の受付をすべて停止しますか？\n（患者さんへのLINE通知も送られます）'
+    : 'この受付をキャンセルしますか？\n（患者さんへのLINE通知も送られます）';
+  if (!confirm(msg)) return;
   try {
-    const params = new URLSearchParams({ action: 'adminCancel', userId, reservationId });
+    const params = new URLSearchParams({ action: 'adminCancel', userId, reservationId, scope: scope || 'one' });
     const res  = await fetch(`${GAS_URL}?${params.toString()}`);
     const data = await res.json();
     if (data.success) {
@@ -722,11 +733,54 @@ async function openSettings() {
 }
 
 function switchSettingsTab(tab) {
-  document.getElementById('settingsTabClosed').style.display = tab === 'closed' ? '' : 'none';
-  document.getElementById('settingsTabLimits').style.display = tab === 'limits' ? '' : 'none';
-  document.getElementById('tabSettingsClosed').className = `settings-tab-btn ${tab==='closed'?'active':'inactive'}`;
-  document.getElementById('tabSettingsLimits').className = `settings-tab-btn ${tab==='limits'?'active':'inactive'}`;
+  document.getElementById('settingsTabClosed').style.display    = tab === 'closed' ? '' : 'none';
+  document.getElementById('settingsTabLimits').style.display    = tab === 'limits' ? '' : 'none';
+  document.getElementById('settingsTabRecurring').style.display = tab === 'recurring' ? '' : 'none';
+  document.getElementById('tabSettingsClosed').className    = `settings-tab-btn ${tab==='closed'?'active':'inactive'}`;
+  document.getElementById('tabSettingsLimits').className    = `settings-tab-btn ${tab==='limits'?'active':'inactive'}`;
+  document.getElementById('tabSettingsRecurring').className = `settings-tab-btn ${tab==='recurring'?'active':'inactive'}`;
   if (tab === 'limits' && Object.keys(slotLimits).length === 0) loadLimitSettings();
+  if (tab === 'recurring') loadRecurringList();
+}
+
+// ============================================================
+// 毎週の受付
+// ============================================================
+async function loadRecurringList() {
+  const box = document.getElementById('recurringList');
+  box.innerHTML = '<div class="loading"><div class="spinner"></div> 読み込み中…</div>';
+  try {
+    const res  = await fetch(`${GAS_URL}?action=getRecurring&userId=${userId}`);
+    const data = await res.json();
+    const rules = data.rules || [];
+    if (!rules.length) { box.innerHTML = '<p style="color:var(--sub);font-size:14px;padding:12px 0">毎週の受付はありません。</p>'; return; }
+    box.innerHTML = rules.map(r => `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f0f8f6;border:1.5px solid var(--teal-light);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+        <div style="min-width:0">
+          <div style="font-size:14px;font-weight:700">🔁 ${escapeHtml(r.name || '未入力')} 様</div>
+          <div style="font-size:12px;color:var(--sub);margin-top:2px">毎週${DAY_NAMES[r.weekday]}曜 ${r.time}〜${calcEndTime(r.time)} ／ ${getMenuLabel(r.menuId)}</div>
+          <div style="font-size:12px;color:var(--sub)">今後${r.futureCount}件${r.nextDate ? '（次回 ' + r.nextDate.slice(5).replace('-','/') + '）' : ''}</div>
+        </div>
+        <button onclick="stopRecurring('${r.id}')" style="flex-shrink:0;background:#fff;color:#e74c3c;border:1.5px solid #e74c3c;border-radius:6px;padding:8px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">停止</button>
+      </div>`).join('');
+  } catch(e) {
+    box.innerHTML = '<p style="color:#e74c3c;padding:12px 0">読み込みに失敗しました</p>';
+  }
+}
+
+async function stopRecurring(ruleId) {
+  if (!confirm('この毎週の受付を停止しますか？\n（明日以降の受付も取り消され、本人へLINE通知が送られます）')) return;
+  try {
+    const res  = await fetch(`${GAS_URL}?action=adminStopRecurring&userId=${userId}&ruleId=${encodeURIComponent(ruleId)}`);
+    const data = await res.json();
+    if (data.success) {
+      showToast(`✅ 停止しました（${data.removed}件を取り消し）`);
+      await loadRecurringList();
+      await loadAndRender();
+    } else {
+      showToast('⚠️ ' + (data.message || '停止に失敗しました'));
+    }
+  } catch(e) { showToast('⚠️ 通信エラーが発生しました'); }
 }
 
 function renderClosedDayBtns() {
