@@ -726,6 +726,13 @@ async function submitBooking() {
     await fetch(`${GAS_URL}?${params.toString()}`, { mode: 'no-cors' });
     // no-corsではレスポンス読めないので2秒待ってリロード
     await new Promise(r => setTimeout(r, 2000));
+    // 受付内容の返信（無料のReply）を呼び出すため、LINEのトークに「受付確認」を自動送信
+    try {
+      if (typeof liff !== 'undefined' && liff.isInClient()) {
+        const sd = new Date(selectedDate + 'T00:00:00');
+        await liff.sendMessages([{ type: 'text', text: `受付確認 ${sd.getMonth()+1}/${sd.getDate()} ${selectedTime}` }]);
+      }
+    } catch(e) { /* 送信できなくても受付自体は完了している */ }
     const menuLabel = MENUS.find(m => m.id === selectedMenu)?.label || '';
     const doneInfo  = { date: selectedDate, time: selectedTime, name, menuLabel, comment, isWait: selectedIsWait, isRecurring: promo === RECURRING_CODE };
     closePanel();
@@ -744,7 +751,7 @@ function showDone({ date, time, name, menuLabel, comment, isWait, isRecurring })
   document.getElementById('doneTitle').textContent = isWait ? '待ち受付を承りました' : '当日受付完了！';
   document.getElementById('doneNote').textContent  = isWait
     ? '一般受付の上限に達しているため、待ち受付として承りました。'
-    : (isRecurring ? '毎週この曜日・時間で継続します。月末に継続確認をお送りします。' : '受付内容はLINEにもお送りします。');
+    : (isRecurring ? '毎週この曜日・時間で継続します。月末に継続確認をお送りします。' : '受付内容はLINEのトークにも返信されます。');
   const d = new Date(date + 'T00:00:00');
   document.getElementById('doneDetail').innerHTML = `
     <p>📅 <span>${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）</span></p>
