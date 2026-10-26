@@ -91,6 +91,11 @@
   .slot-mark.mark-wait { color: #b98a12; font-size: 18px; }
   .recur-note { background:#e8f4fb; border:1px solid #b9dcf0; color:#14597a; border-radius:10px; padding:10px 12px; font-size:13px; line-height:1.6; margin-bottom:10px; }
   .wait-note { background:#fff6dd; border:1px solid #ecd48a; color:#7a5a00; border-radius:10px; padding:10px 12px; font-size:13px; line-height:1.6; margin-bottom:10px; }
+  .wd-row { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:10px; }
+  .wd-btn { background:#fff; border:2px solid var(--border); border-radius:8px; padding:10px 0; font-size:15px; font-weight:700; font-family:var(--font); cursor:pointer; color:var(--text); }
+  .wd-btn.selected { background:var(--teal-light); border-color:var(--teal); color:var(--teal); box-shadow:0 0 0 3px rgba(42,122,111,.2); }
+  .wd-btn:disabled { background:#f0f0f0; color:#bbb; cursor:default; }
+  .pick-title { font-size:13px; font-weight:700; color:var(--teal); margin:4px 2px 8px; }
   .slot-item.closed-slot { border-color: #e0e0e0; background: #f5f5f5; cursor: pointer; }
   .slot-item.selected { background: var(--teal-light); border-color: var(--teal); box-shadow: 0 0 0 3px rgba(42,122,111,.2); }
 
@@ -530,10 +535,18 @@ function renderTodaySlots(today) {
   html += `<div class="user-bar">
     <div>
       <div class="ub-main">👤 ${escapeHtml(userName)} 様</div>
-      ${promoCode === RECURRING_CODE ? '<div class="ub-promo">🔁 毎週受付（選んだ曜日・時間で毎週続きます）</div>' : (promoCode ? '<div class="ub-promo">🎟️ コード適用中（上限を超えて受付できます）</div>' : '')}
+      ${promoCode === RECURRING_CODE ? '<div class="ub-promo">🔁 毎週受付（曜日と時間を選んでください）</div>' : (promoCode ? '<div class="ub-promo">🎟️ コード適用中（上限を超えて受付できます）</div>' : '')}
     </div>
     <button onclick="backToInfo()">‹ 入力に戻る</button>
   </div>`;
+
+  // 毎週受付（コード「定期」）：曜日と時間を選ぶ画面
+  if (promoCode === RECURRING_CODE) {
+    html += renderRecurringPicker();
+    html += '</div>';
+    document.getElementById('mainContent').innerHTML = html;
+    return;
+  }
 
   // 休業日
   if (isClosed || isHoliday) {
@@ -599,6 +612,60 @@ function renderTodaySlots(today) {
   document.getElementById('mainContent').innerHTML = html;
 }
 
+// 毎週受付：曜日・時間の選択画面
+function renderRecurringPicker() {
+  recurWeekday = null; recurTime = null;
+  let h = '<div class="recur-note">🔁 毎週受付する<b>曜日</b>と<b>時間</b>を選んでください。選んだ曜日・時間で毎週受付します。</div>';
+  h += '<div class="pick-title">① 曜日</div><div class="wd-row">';
+  DAY_NAMES.forEach((n, i) => {
+    const off = CLOSED_DAYS.includes(i);
+    h += `<button type="button" class="wd-btn" data-wd="${i}" ${off ? 'disabled' : `onclick="selectRecurWeekday(${i},this)"`}>${n}${off ? '<div style="font-size:9px">休</div>' : ''}</button>`;
+  });
+  h += '</div><div class="pick-title">② 時間</div><div class="slots-grid">';
+  slotDefs.forEach(def => {
+    h += `<div class="slot-item open" data-time="${def.time}" onclick="selectRecurTime('${def.time}',this)">
+      <div class="slot-time">${def.time}〜${calcEndTime(def.time)}</div>
+    </div>`;
+  });
+  h += '</div>';
+  return h;
+}
+
+function selectRecurWeekday(i, el) {
+  recurWeekday = i;
+  document.querySelectorAll('.wd-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  openRecurPanel();
+}
+
+function selectRecurTime(time, el) {
+  recurTime = time;
+  document.querySelectorAll('.slots-grid .slot-item').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedItem = el;
+  openRecurPanel();
+}
+
+function openRecurPanel() {
+  if (recurWeekday === null || !recurTime) return; // 曜日と時間の両方が決まったら確認を出す
+  selectedIsWait = false;
+  document.getElementById('selectedBadge').textContent =
+    `🔁 毎週${DAY_NAMES[recurWeekday]}曜日　🕐 ${recurTime}〜${calcEndTime(recurTime)}`;
+  const menuLabel = MENUS.find(m => m.id === selectedMenu)?.label || '';
+  const rows = [['👤 名前', userName + ' 様'], ['🩹 施術', menuLabel]];
+  if (userComment) rows.push(['💬 コメント', userComment]);
+  rows.push(['🎟️ コード', promoCode]);
+  rows.push(['🔁 毎週', `${DAY_NAMES[recurWeekday]}曜 ${recurTime}〜${calcEndTime(recurTime)}`]);
+  document.getElementById('confirmList').innerHTML = rows.map(([k, v]) =>
+    `<div class="confirm-row"><span class="cr-key">${k}</span><span class="cr-val">${escapeHtml(v)}</span></div>`
+  ).join('');
+  document.getElementById('recurNote').style.display = '';
+  document.getElementById('waitNote').style.display = 'none';
+  const btn = document.getElementById('btnBook');
+  btn.disabled = false; btn.textContent = '毎週受付を登録する';
+  document.getElementById('bookingPanel').classList.add('open');
+}
+
 function generateTimeSlots() {
   return slotDefs.map(d => d.time);
 }
@@ -607,6 +674,8 @@ function generateTimeSlots() {
 // 枠選択 → パネル表示
 // ============================================================
 let selectedIsWait = false;
+let recurWeekday = null; // 毎週受付：選んだ曜日（0=日〜6=土）
+let recurTime    = null; // 毎週受付：選んだ時間
 function selectSlot(date, time, el, isWait) {
   selectedIsWait = !!isWait;
   // 以前の選択を解除
@@ -659,7 +728,7 @@ function onPromoInput() {
     hint.textContent = '';
     promoValid = false;
   } else if (val === RECURRING_CODE) {
-    hint.innerHTML = '<span class="promo-ok">✅ 毎週用のコードです（選んだ曜日・時間で毎週受付します。月末に継続確認が届きます）</span>';
+    hint.innerHTML = '<span class="promo-ok">✅ 毎週用のコードです（次の画面で曜日と時間を選びます。月末に継続確認が届きます）</span>';
     promoValid = true;
   } else if (PROMO_CODES.includes(val)) {
     hint.innerHTML = '<span class="promo-ok">✅ 有効なコードです（上限を超えて受付できます。受付終了・休業日は不可）</span>';
@@ -710,9 +779,32 @@ async function submitBooking() {
   if (!name) { showToast('名前を入力してください'); return; }
   if (!selectedMenu) { showToast('施術内容を選んでください'); return; }
 
+  const isRecurPick = promo === RECURRING_CODE;
+  if (isRecurPick && (recurWeekday === null || !recurTime)) { showToast('曜日と時間を選んでください'); return; }
+
   btn.disabled = true; btn.textContent = '送信中…';
 
   try {
+    if (isRecurPick) {
+      const rp = new URLSearchParams({
+        action: 'bookRecurring', userId, weekday: String(recurWeekday), time: recurTime,
+        names: name, menuId: selectedMenu, comment, promoCode: promo,
+      });
+      await fetch(`${GAS_URL}?${rp.toString()}`, { mode: 'no-cors' });
+      await new Promise(r => setTimeout(r, 2500));
+      const wd = recurWeekday, tm = recurTime;
+      // 登録内容の返信（無料のReply）を呼び出す
+      try {
+        if (typeof liff !== 'undefined' && liff.isInClient()) {
+          await liff.sendMessages([{ type: 'text', text: `毎週確認 ${DAY_NAMES[wd]} ${tm}` }]);
+        }
+      } catch(e) {}
+      const menuLabel2 = MENUS.find(m => m.id === selectedMenu)?.label || '';
+      closePanel();
+      showDone({ date: null, time: tm, name, menuLabel: menuLabel2, comment, isWait: false, isRecurring: true, recurWd: wd });
+      await loadTodaySlots();
+      return;
+    }
     const params = new URLSearchParams({
       action: 'book',
       userId,
@@ -747,14 +839,17 @@ async function submitBooking() {
 // ============================================================
 // 完了画面
 // ============================================================
-function showDone({ date, time, name, menuLabel, comment, isWait, isRecurring }) {
-  document.getElementById('doneTitle').textContent = isWait ? '待ち受付を承りました' : '当日受付完了！';
+function showDone({ date, time, name, menuLabel, comment, isWait, isRecurring, recurWd }) {
+  document.getElementById('doneTitle').textContent = isWait ? '待ち受付を承りました' : (recurWd !== undefined ? '毎週受付を登録しました' : '当日受付完了！');
   document.getElementById('doneNote').textContent  = isWait
     ? '一般受付の上限に達しているため、待ち受付として承りました。'
-    : (isRecurring ? '毎週この曜日・時間で継続します。月末に継続確認をお送りします。' : '受付内容はLINEのトークにも返信されます。');
-  const d = new Date(date + 'T00:00:00');
+    : (isRecurring ? '毎週この曜日・時間で継続します。月末に継続確認をお送りします。登録内容はLINEのトークに返信されます。' : '受付内容はLINEのトークにも返信されます。');
+  const d = date ? new Date(date + 'T00:00:00') : null;
+  const dateRow = recurWd !== undefined
+    ? `<p>🔁 <span>毎週${DAY_NAMES[recurWd]}曜日</span></p>`
+    : `<p>📅 <span>${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）</span></p>`;
   document.getElementById('doneDetail').innerHTML = `
-    <p>📅 <span>${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）</span></p>
+    ${dateRow}
     <p>🕐 <span>${time}〜${calcEndTime(time)}</span></p>
     <p>👤 <span>${escapeHtml(name)} 様</span></p>
     <p>🩹 <span>${escapeHtml(menuLabel)}</span></p>
