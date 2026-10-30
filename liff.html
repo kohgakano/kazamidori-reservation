@@ -770,7 +770,13 @@ function selectMenu(id) {
 // ============================================================
 // 受付送信
 // ============================================================
+let submitting = false; // 送信中の二重タップ防止
 async function submitBooking() {
+  if (submitting) return;
+  submitting = true;
+  try { await submitBookingInner(); } finally { submitting = false; }
+}
+async function submitBookingInner() {
   const btn  = document.getElementById('btnBook');
   const name    = userName;
   const promo   = promoCode;
