@@ -95,6 +95,9 @@
   .wd-btn { background:#fff; border:2px solid var(--border); border-radius:8px; padding:10px 0; font-size:15px; font-weight:700; font-family:var(--font); cursor:pointer; color:var(--text); }
   .wd-btn.selected { background:var(--teal-light); border-color:var(--teal); color:var(--teal); box-shadow:0 0 0 3px rgba(42,122,111,.2); }
   .wd-btn:disabled { background:#f0f0f0; color:#bbb; cursor:default; }
+  .date-tabs { display:flex; gap:6px; overflow-x:auto; margin-bottom:10px; padding-bottom:2px; }
+  .date-tab { flex:0 0 auto; min-width:52px; background:#fff; border:2px solid var(--border); border-radius:8px; padding:7px 4px; font-size:13px; font-weight:700; font-family:var(--font); cursor:pointer; color:var(--text); }
+  .date-tab.selected { background:var(--teal-light); border-color:var(--teal); color:var(--teal); }
   .pick-title { font-size:13px; font-weight:700; color:var(--teal); margin:4px 2px 8px; }
   .slot-item.closed-slot { border-color: #e0e0e0; background: #f5f5f5; cursor: pointer; }
   .slot-item.selected { background: var(--teal-light); border-color: var(--teal); box-shadow: 0 0 0 3px rgba(42,122,111,.2); }
@@ -382,7 +385,9 @@ const DEFAULT_SLOT_DEFS = [
 const WARN_THRESHOLD = 2;  // 残り△表示の閾値
 // 有効なプロモーションコード（入力すると上限を超えて受付できる。休みの枠は不可）
 const RECURRING_CODE = '定期'; // 毎週の受付用コード（選んだ曜日・時間で毎週受付）
-const PROMO_CODES    = ['事故', '即', RECURRING_CODE];
+const ADVANCE_CODE   = '風';   // 事前受付用コード：今日から7日先まで受付できる（枠は一般扱い・1週間に3件まで）
+const ADVANCE_DAYS   = 7;
+const PROMO_CODES    = ['事故', '即', RECURRING_CODE, ADVANCE_CODE];
 
 // 施術内容（ここを編集して追加できます）
 const MENUS = [
@@ -447,9 +452,11 @@ function goSlots() {
   if (!selectedMenu) { showToast('施術内容を選んでください'); return; }
   document.getElementById('stepInfo').style.display = 'none';
   document.getElementById('mainContent').style.display = '';
-  renderTodaySlots(formatDate(new Date()));
+  viewDate = formatDate(new Date());
   document.getElementById('legend').style.display = 'flex';
   window.scrollTo(0, 0);
+  if (promoCode === ADVANCE_CODE) { loadTodaySlots(); return; } // 7日先までの空き状況を読み込む
+  renderTodaySlots(viewDate);
 }
 
 // ステップ2 → ステップ1
@@ -483,10 +490,16 @@ function updateHeaderDate(now) {
 // ============================================================
 // 当日スロット取得・表示
 // ============================================================
+function advanceDates() {
+  const out = [];
+  for (let i = 0; i <= ADVANCE_DAYS; i++) { const d = new Date(); d.setDate(d.getDate() + i); out.push(formatDate(d)); }
+  return out;
+}
 async function fetchSlots() {
   const today = formatDate(new Date());
+  const dates = (promoCode === ADVANCE_CODE) ? advanceDates().join(',') : today;
   try {
-    const res  = await fetch(`${GAS_URL}?action=getSlots&dates=${today}&userId=${userId}`);
+    const res  = await fetch(`${GAS_URL}?action=getSlots&dates=${dates}&userId=${userId}`);
     const data = await res.json();
     slotsData     = data.slots || {};
     closedSlots   = data.closed || {};
@@ -498,6 +511,7 @@ async function fetchSlots() {
       slotDefs = data.slotDefs.map(d => ({ time: d.time, end: d.endTime || d.end, promoOnly: !!d.promoOnly }));
     }
     if (data.maxTotal) maxTotal = Number(data.maxTotal);
+    advanceUsed = Number(data.advanceUsed || 0);
   } catch(e) {
     slotsData = {};
   }
@@ -508,7 +522,7 @@ async function loadTodaySlots() {
   document.getElementById('mainContent').innerHTML =
     '<div class="loading"><div class="spinner"></div> 読み込み中…</div>';
   await fetchSlots();
-  renderTodaySlots(formatDate(new Date()));
+  renderTodaySlots(viewDate || formatDate(new Date()));
 }
 
 function renderTodaySlots(today) {
@@ -527,7 +541,7 @@ function renderTodaySlots(today) {
   html += `<div class="date-header">
     <div>
       <div class="date-header-main">📅 ${month}月${day}日（${dname}）</div>
-      <div class="date-header-sub">本日の当日受付</div>
+      <div class="date-header-sub">${today === formatDate(new Date()) ? '本日の当日受付' : '事前受付'}</div>
     </div>
   </div>`;
 
@@ -535,10 +549,19 @@ function renderTodaySlots(today) {
   html += `<div class="user-bar">
     <div>
       <div class="ub-main">👤 ${escapeHtml(userName)} 様</div>
-      ${promoCode === RECURRING_CODE ? '<div class="ub-promo">🔁 毎週受付（曜日と時間を選んでください）</div>' : (promoCode ? '<div class="ub-promo">🎟️ コード適用中（上限を超えて受付できます）</div>' : '')}
+      ${promoCode === ADVANCE_CODE ? '<div class="ub-promo">🗓️ 事前受付（7日先まで・1週間に3件まで／あと' + Math.max(0, ADVANCE_MAX - advanceUsed) + '件）</div>' : promoCode === RECURRING_CODE ? '<div class="ub-promo">🔁 毎週受付（曜日と時間を選んでください）</div>' : (promoCode ? '<div class="ub-promo">🎟️ コード適用中（上限を超えて受付できます）</div>' : '')}
     </div>
     <button onclick="backToInfo()">‹ 入力に戻る</button>
   </div>`;
+
+  // 事前受付（コード「風」）：日付を選ぶ（今日〜7日先）
+  if (promoCode === ADVANCE_CODE) {
+    html += '<div class="date-tabs">' + advanceDates().map(d => {
+      const dd = new Date(d + 'T00:00:00');
+      const label = d === formatDate(new Date()) ? '今日' : `${dd.getMonth()+1}/${dd.getDate()}`;
+      return `<button type="button" class="date-tab ${d === today ? 'selected' : ''}" onclick="setViewDate('${d}')">${label}<div style="font-size:10px">${DAY_NAMES[dd.getDay()]}</div></button>`;
+    }).join('') + '</div>';
+  }
 
   // 毎週受付（コード「定期」）：曜日と時間を選ぶ画面
   if (promoCode === RECURRING_CODE) {
@@ -550,7 +573,7 @@ function renderTodaySlots(today) {
 
   // 休業日
   if (isClosed || isHoliday) {
-    html += `<div class="reception-closed-notice">🏖️ 本日は休業日です</div>`;
+    html += `<div class="reception-closed-notice">🏖️ ${today === formatDate(new Date()) ? '本日' : 'この日'}は休業日です</div>`;
     html += '</div>';
     document.getElementById('mainContent').innerHTML = html;
     return;
@@ -562,7 +585,7 @@ function renderTodaySlots(today) {
     const time = def.time;
     // 枠の終了時刻を過ぎたら受付終了（現在進行中の時間帯はまだ受付可能）
     const endTime = calcEndTime(time);
-    const endDt   = new Date(today + 'T' + endTime + ':00');
+    const endDt   = new Date(today + 'T' + endTime + ':00');   // 明日以降の日付は過去にならない
     const isPast  = endDt <= now;
     const limit   = limitsData[today]?.[time] ?? MAX_PER_SLOT;   // プロモ＋一般の上限
     const conf    = slotsData[today]?.[time] ?? 0;               // プロモ＋一般の受付済み
@@ -579,9 +602,9 @@ function renderTodaySlots(today) {
       cls = 'past'; markCls = 'mark-past'; mark = '－';
     } else if (isClosedSlot) {
       cls = 'closed-slot'; markCls = 'mark-closed'; mark = '受付終了';
-    } else if (def.promoOnly && !promoCode) {
+    } else if (def.promoOnly && (!promoCode || promoCode === ADVANCE_CODE)) {
       cls = 'closed-slot'; markCls = 'mark-closed'; mark = 'コード<br>専用';
-    } else if (promoCode) {
+    } else if (promoCode && promoCode !== ADVANCE_CODE) {
       // コードあり：受付終了以外は、上限・最大件数・上限0を超えて受付できる
       cls = 'open'; markCls = 'mark-open'; mark = '○'; canSelect = true;
       sub = '<div style="font-size:11px;color:var(--teal)">コード適用</div>';
@@ -666,6 +689,12 @@ function openRecurPanel() {
   document.getElementById('bookingPanel').classList.add('open');
 }
 
+function setViewDate(d) {
+  closePanel();
+  viewDate = d;
+  renderTodaySlots(d);
+}
+
 function generateTimeSlots() {
   return slotDefs.map(d => d.time);
 }
@@ -674,9 +703,13 @@ function generateTimeSlots() {
 // 枠選択 → パネル表示
 // ============================================================
 let selectedIsWait = false;
+let advanceUsed = 0; // 事前受付：今日〜7日先の自分の受付件数
+const ADVANCE_MAX = 3;
+let viewDate = null; // 表示中の日付（事前受付コードのとき日付を切り替える）
 let recurWeekday = null; // 毎週受付：選んだ曜日（0=日〜6=土）
 let recurTime    = null; // 毎週受付：選んだ時間
 function selectSlot(date, time, el, isWait) {
+  if (promoCode === ADVANCE_CODE && advanceUsed >= ADVANCE_MAX) { showToast(`1週間に受付できるのは${ADVANCE_MAX}件までです`); return; }
   selectedIsWait = !!isWait;
   // 以前の選択を解除
   if (selectedItem && selectedItem !== el) selectedItem.classList.remove('selected');
@@ -729,6 +762,9 @@ function onPromoInput() {
     promoValid = false;
   } else if (val === RECURRING_CODE) {
     hint.innerHTML = '<span class="promo-ok">✅ 毎週用のコードです（次の画面で曜日と時間を選びます。月末に継続確認が届きます）</span>';
+    promoValid = true;
+  } else if (val === ADVANCE_CODE) {
+    hint.innerHTML = '<span class="promo-ok">✅ 事前受付のコードです（今日から7日先まで受付できます。1週間に3件まで）</span>';
     promoValid = true;
   } else if (PROMO_CODES.includes(val)) {
     hint.innerHTML = '<span class="promo-ok">✅ 有効なコードです（上限を超えて受付できます。受付終了・休業日は不可）</span>';
@@ -846,7 +882,7 @@ async function submitBookingInner() {
 // 完了画面
 // ============================================================
 function showDone({ date, time, name, menuLabel, comment, isWait, isRecurring, recurWd }) {
-  document.getElementById('doneTitle').textContent = isWait ? '待ち受付を承りました' : (recurWd !== undefined ? '毎週受付を登録しました' : '当日受付完了！');
+  document.getElementById('doneTitle').textContent = isWait ? '待ち受付を承りました' : (recurWd !== undefined ? '毎週受付を登録しました' : (date && date !== formatDate(new Date()) ? '受付完了！' : '当日受付完了！'));
   document.getElementById('doneNote').textContent  = isWait
     ? '一般受付の上限に達しているため、待ち受付として承りました。'
     : (isRecurring ? '毎週この曜日・時間で継続します。月末に継続確認をお送りします。登録内容はLINEのトークに返信されます。' : '受付内容はLINEのトークにも返信されます。');
