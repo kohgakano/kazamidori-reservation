@@ -406,6 +406,7 @@ let selectedItem = null; // 選択中のDOM要素
 let promoValid   = false;
 let CLOSED_DAYS  = [];
 let HOLIDAY_DATES = [];
+let generalClosed = {};  // 一般閉（コード2）に設定された時間 { 'yyyy-MM-dd': ['10:00', ...] }
 let closedSlots  = {};   // 受付終了に設定された時間 { 'yyyy-MM-dd': ['10:00', ...] }
 let waitingData  = {};   // 待ち受付の件数 { 'yyyy-MM-dd': { '10:00': 1, ... } }
 let slotDefs     = DEFAULT_SLOT_DEFS;
@@ -507,6 +508,7 @@ async function fetchSlots() {
     HOLIDAY_DATES = data.holiday_dates ? String(data.holiday_dates).split(',').map(s => s.trim()).filter(s => s) : [];
     limitsData    = data.limits || {};
     waitingData   = data.waiting || {};
+    generalClosed = data.generalClosed || {};
     if (Array.isArray(data.slotDefs) && data.slotDefs.length) {
       slotDefs = data.slotDefs.map(d => ({ time: d.time, end: d.endTime || d.end, promoOnly: !!d.promoOnly }));
     }
@@ -609,6 +611,9 @@ function renderTodaySlots(today) {
       // コードあり：受付終了以外は、上限・最大件数・上限0を超えて受付できる
       cls = 'open'; markCls = 'mark-open'; mark = '○'; canSelect = true;
       sub = '<div style="font-size:11px;color:var(--teal)">コード適用</div>';
+    } else if ((generalClosed[today] || []).includes(time)) {
+      // 一般閉：コード（事故・即）がない人・「風」の人は受付不可
+      cls = 'closed-slot'; markCls = 'mark-closed'; mark = '受付終了';
     } else if (isLimitZero) {
       cls = 'closed-slot'; markCls = 'mark-closed'; mark = '受付終了';
     } else if (isFullTotal) {
