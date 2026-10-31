@@ -222,7 +222,7 @@
           <option value="0">日曜</option>
         </select>
       </div>
-      <div style="font-size:12px;color:var(--sub);margin-bottom:8px;line-height:1.6">上限＝プロモ＋一般の合計人数です。0は休み（コードでも受付不可）。上限を超えた一般の受付は「待ち受付」になります（1枠あたり最大8件）。</div>
+      <div style="font-size:12px;color:var(--sub);margin-bottom:8px;line-height:1.6">人数＝一般で受け付ける人数です（コードありは超えて受付できます）。超えた一般の受付は「待ち受付」になります（1枠あたり最大8件）。コード：通常受付／満枠（一般は待ち受付のみ）／一般閉（一般・待ちを停止、事故・即・定期だけ受付）／全閉（すべて停止）。</div>
       <div class="limit-grid" id="limitInputs"></div>
       <button onclick="saveLimitSettings()"
         style="width:100%;background:var(--teal);color:#fff;border:none;border-radius:8px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:16px">
@@ -306,6 +306,7 @@ let adminSelectedDate  = null;
 let adminSelectedTime  = null;
 let settingsClosedDays = [];
 let slotLimits         = {};
+let slotCodes          = {};   // 曜日×時間の標準コード {時間:{曜日:0|2|3}}
 
 async function init() {
   try {
@@ -862,6 +863,7 @@ async function loadLimitSettings() {
     const data = await res.json();
     if (data.limits) {
       slotLimits = data.limits;
+      slotCodes  = data.codes || {};
       renderLimitInputs();
     } else {
       showToast('⚠️ 上限設定の読み込みに失敗しました');
@@ -877,8 +879,12 @@ function renderLimitInputs() {
   document.getElementById('limitInputs').innerHTML = times.map(time => `
     <div class="limit-item">
       <span class="limit-time">${time}</span>
+      <span style="font-size:11px;color:var(--sub)">人数</span>
       <input type="number" min="0" max="10" value="${slotLimits[time]?.[day] ?? 0}"
         id="limit_${time.replace(':','_')}" class="limit-input">
+      <select id="code_${time.replace(':','_')}" class="limit-input" style="width:auto;flex:1;min-width:0;font-size:12px">
+        ${[[0,'通常受付'],[1,'満枠（即＋待ち可）'],[2,'一般閉（即のみ可）'],[3,'全閉（すべて停止）']].map(([v,l]) => `<option value="${v}" ${Number(slotCodes[time]?.[day] ?? 0) === v ? 'selected' : ''}>${l}</option>`).join('')}
+      </select>
     </div>`).join('');
 }
 
@@ -886,14 +892,17 @@ async function saveLimitSettings() {
   const day   = document.getElementById('limitDaySelect').value;
   const times = Object.keys(slotLimits).sort();
   const newLimits = {};
+  const newCodes  = {};
   times.forEach(time => {
     const el = document.getElementById(`limit_${time.replace(':','_')}`);
     newLimits[time] = el ? Number(el.value) : 0;
+    const ce = document.getElementById(`code_${time.replace(':','_')}`);
+    newCodes[time] = ce ? Number(ce.value) : 0;
   });
   try {
     const params = new URLSearchParams({
       action: 'saveSlotLimits', userId,
-      day, limits: JSON.stringify(newLimits),
+      day, limits: JSON.stringify(newLimits), codes: JSON.stringify(newCodes),
     });
     const res  = await fetch(`${GAS_URL}?${params.toString()}`);
     const data = await res.json();
@@ -901,6 +910,8 @@ async function saveLimitSettings() {
       times.forEach(time => {
         if (!slotLimits[time]) slotLimits[time] = {};
         slotLimits[time][day] = newLimits[time];
+        if (!slotCodes[time]) slotCodes[time] = {};
+        slotCodes[time][day] = newCodes[time];
       });
       showToast('✅ 上限設定を保存しました');
     } else {
