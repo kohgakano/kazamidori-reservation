@@ -406,6 +406,7 @@ let selectedItem = null; // 選択中のDOM要素
 let promoValid   = false;
 let CLOSED_DAYS  = [];
 let HOLIDAY_DATES = [];
+let fullSlots    = {};  // 満枠（コード1・手動）に設定された時間
 let generalClosed = {};  // 一般閉（コード2）に設定された時間 { 'yyyy-MM-dd': ['10:00', ...] }
 let closedSlots  = {};   // 受付終了に設定された時間 { 'yyyy-MM-dd': ['10:00', ...] }
 let waitingData  = {};   // 待ち受付の件数 { 'yyyy-MM-dd': { '10:00': 1, ... } }
@@ -509,6 +510,7 @@ async function fetchSlots() {
     limitsData    = data.limits || {};
     waitingData   = data.waiting || {};
     generalClosed = data.generalClosed || {};
+    fullSlots     = data.fullSlots || {};
     if (Array.isArray(data.slotDefs) && data.slotDefs.length) {
       slotDefs = data.slotDefs.map(d => ({ time: d.time, end: d.endTime || d.end, promoOnly: !!d.promoOnly }));
     }
@@ -598,7 +600,8 @@ function renderTodaySlots(today) {
     const isClosedSlot = (closedSlots[today] || []).includes(time);
     const isLimitZero  = limit === 0;                             // 上限0の枠（コードがあれば受付可）
     const isFullTotal  = total >= maxTotal;                       // 最大件数に到達（コードがあれば受付可）
-    const remaining    = Math.max(0, limit - conf);               // 一般で受けられる残り
+    const manualFull   = (fullSlots[today] || []).includes(time);   // 満枠（コード1）に設定された枠
+    const remaining    = manualFull ? 0 : Math.max(0, limit - conf);   // 一般で受けられる残り
 
     let cls, markCls, mark, sub = '', canSelect = false, isWait = false;
     if (isPast) {
