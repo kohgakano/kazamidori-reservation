@@ -300,6 +300,7 @@ let isAdmin            = false;
 let viewMode           = 'week';
 let offset             = 0;
 let allSlots           = {};
+let allGeneralClosed   = {};   // 一般閉（コード2）の時間 { 日付: [時間] }
 let adminFormData      = { name: '', menuId: '', conditionId: '' };
 let adminSelectedDate  = null;
 let adminSelectedTime  = null;
@@ -360,6 +361,7 @@ async function loadAndRender() {
     const res = await fetch(`${GAS_URL}?action=adminGetSlots&dates=${ds.join(',')}&userId=${userId}`);
     const data = await res.json();
     allSlots = data.slots || {};
+    allGeneralClosed = data.generalClosed || {};
   } catch(e) {
     allSlots = generateDummySlots(dates);
   }
@@ -423,7 +425,8 @@ function renderWeek(dates) {
       } else if (isClosed2) {
         html += `<td class="blocked-cell"><div class="blocked-label" style="color:#e74c3c;font-size:9px">受付<br>終了</div></td>`;
       } else if (reservations.length === 0) {
-        html += `<td class="empty-cell empty-clickable ${isToday?'today-bg':''}" onclick="openAdminBooking('${ds}','${time}')"></td>`;
+        const gcMark = isGC(ds, time) ? '<div style="color:#e67e22;font-size:9px;font-weight:700;text-align:center;line-height:1.1">一般閉</div>' : '';
+        html += `<td class="empty-cell empty-clickable ${isToday?'today-bg':''}" onclick="openAdminBooking('${ds}','${time}')">${gcMark}</td>`;
       } else {
         const names   = reservations.map(r => r.name || '未入力');
         const isMulti = reservations.length > 1;
@@ -500,6 +503,7 @@ function renderDay(date) {
       html += `<div class="timeline-row">
         <div class="tl-time">${time}</div>
         <div class="tl-content">
+          ${isGC(ds, time) ? '<div style="color:#e67e22;font-size:12px;font-weight:700;margin-bottom:4px">🟠 一般閉（即のみ受付）</div>' : ''}
           ${reservations.length === 0
             ? `<span class="tl-empty" style="cursor:pointer;color:var(--teal)" onclick="openAdminBooking('${ds}','${time}')">＋ 当日受付を追加</span>`
             : cards + `<div style="cursor:pointer;color:var(--teal);font-size:12px;font-weight:700;padding:4px 8px;border:1.5px dashed var(--teal);border-radius:4px" onclick="openAdminBooking('${ds}','${time}')">＋ 追加</div>`
@@ -931,6 +935,7 @@ function formatDateJapanese(d) {
   return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）`;
 }
 // 実際の受付（目印の休業日・受付終了などを除く）
+function isGC(ds, time) { return (allGeneralClosed[ds] || []).includes(time); }
 function isRealRes(r) { return r.status === 'confirmed' || r.status === 'waiting'; }
 // その枠が「休み」の理由（休みでなければ空文字）
 function offReason(ds, time) {
