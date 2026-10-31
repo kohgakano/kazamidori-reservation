@@ -651,8 +651,14 @@ async function submitAdminBooking() {
       date: adminSelectedDate, time: adminSelectedTime,
       name: adminFormData.name, menuId: adminFormData.menuId, conditionId: adminFormData.conditionId,
     });
-    await fetch(`${GAS_URL}?${params.toString()}`, { mode: 'no-cors' });
-    await new Promise(r => setTimeout(r, 2000));
+    const res  = await fetch(`${GAS_URL}?${params.toString()}`);
+    const data = await res.json();
+    if (data && data.success === false) {
+      // 重複・満枠などで追加できなかった場合は、理由を表示する
+      showToast('⚠️ ' + (data.message || '追加できませんでした'));
+      btn.disabled = false; btn.textContent = '当日受付を追加する';
+      return;
+    }
     closeAdminPanel();
     showToast(`✅ ${adminFormData.name} 様の当日受付を追加しました`);
     await loadAndRender();
