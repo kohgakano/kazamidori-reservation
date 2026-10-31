@@ -112,10 +112,10 @@
   .settings-tab-btn.active { color:var(--teal); border-bottom-color:var(--teal); }
   .settings-tab-btn.inactive { color:var(--sub); }
 
-  .limit-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-  .limit-item { display:flex; align-items:center; gap:6px; background:#f9f9f9; padding:8px; border-radius:var(--radius); }
-  .limit-time { font-size:13px; font-weight:600; width:50px; }
-  .limit-input { width:60px; padding:6px; border:1.5px solid var(--border); border-radius:4px; font-size:14px; text-align:center; font-family:var(--font); }
+  .limit-grid { display:grid; grid-template-columns:1fr; gap:8px; }
+  .limit-item { display:flex; align-items:center; gap:6px; background:#f9f9f9; padding:8px; border-radius:var(--radius); min-width:0; }
+  .limit-time { font-size:13px; font-weight:600; width:44px; flex-shrink:0; }
+  .limit-input { width:52px; flex-shrink:0; padding:6px; border:1.5px solid var(--border); border-radius:4px; font-size:14px; text-align:center; font-family:var(--font); }
 
   /* 症状一覧 */
   .symptom-card { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; background:#fff; border-radius:var(--radius); border:1px solid var(--border); cursor:pointer; transition: background .15s; }
@@ -879,10 +879,10 @@ function renderLimitInputs() {
   document.getElementById('limitInputs').innerHTML = times.map(time => `
     <div class="limit-item">
       <span class="limit-time">${time}</span>
-      <span style="font-size:11px;color:var(--sub)">人数</span>
+      <span style="font-size:11px;color:var(--sub);flex-shrink:0">人数</span>
       <input type="number" min="0" max="10" value="${slotLimits[time]?.[day] ?? 0}"
         id="limit_${time.replace(':','_')}" class="limit-input">
-      <select id="code_${time.replace(':','_')}" class="limit-input" style="width:auto;flex:1;min-width:0;font-size:12px">
+      <select id="code_${time.replace(':','_')}" class="limit-input" style="width:auto;flex:1 1 0;min-width:0;max-width:100%;font-size:12px;padding:6px 2px">
         ${[[0,'通常受付'],[1,'満枠（即＋待ち可）'],[2,'一般閉（即のみ可）'],[3,'全閉（すべて停止）']].map(([v,l]) => `<option value="${v}" ${Number(slotCodes[time]?.[day] ?? 0) === v ? 'selected' : ''}>${l}</option>`).join('')}
       </select>
     </div>`).join('');
