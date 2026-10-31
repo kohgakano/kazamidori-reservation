@@ -512,6 +512,7 @@ async function fetchSlots() {
     }
     if (data.maxTotal) maxTotal = Number(data.maxTotal);
     advanceUsed = Number(data.advanceUsed || 0);
+    myBookings  = Array.isArray(data.mine) ? data.mine : [];
   } catch(e) {
     slotsData = {};
   }
@@ -703,12 +704,16 @@ function generateTimeSlots() {
 // 枠選択 → パネル表示
 // ============================================================
 let selectedIsWait = false;
+let myBookings = []; // 自分の今日以降の受付 [{date,time,name}]
 let advanceUsed = 0; // 事前受付：今日〜7日先の自分の受付件数
 const ADVANCE_MAX = 3;
 let viewDate = null; // 表示中の日付（事前受付コードのとき日付を切り替える）
 let recurWeekday = null; // 毎週受付：選んだ曜日（0=日〜6=土）
 let recurTime    = null; // 毎週受付：選んだ時間
 function selectSlot(date, time, el, isWait) {
+  // 同じ名前の人は同じ日に1件まで
+  const sameDay = myBookings.find(b => b.date === date && b.name === userName);
+  if (sameDay) { showToast(sameDay.time === time ? 'この時間はすでに受付済みです' : `この日は${sameDay.time}で受付済みです（同じ日は1件まで）`); return; }
   if (promoCode === ADVANCE_CODE && advanceUsed >= ADVANCE_MAX) { showToast(`1週間に受付できるのは${ADVANCE_MAX}件までです`); return; }
   selectedIsWait = !!isWait;
   // 以前の選択を解除
