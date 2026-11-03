@@ -784,7 +784,7 @@ function switchSettingsTab(tab) {
   document.getElementById('settingsTabRecurring').style.display = tab === 'recurring' ? '' : 'none';
   document.getElementById('settingsTabStats').style.display     = tab === 'stats' ? '' : 'none';
   document.getElementById('tabSettingsStats').className = `settings-tab-btn ${tab==='stats'?'active':'inactive'}`;
-  if (tab === 'stats' && !document.getElementById('statsFrom').value) { initStatsDates(); loadCancelStats(); }
+  if (tab === 'stats') { if (!document.getElementById('statsFrom').value) initStatsDates(); loadCancelStats(); }
   document.getElementById('tabSettingsClosed').className    = `settings-tab-btn ${tab==='closed'?'active':'inactive'}`;
   document.getElementById('tabSettingsLimits').className    = `settings-tab-btn ${tab==='limits'?'active':'inactive'}`;
   document.getElementById('tabSettingsRecurring').className = `settings-tab-btn ${tab==='recurring'?'active':'inactive'}`;
