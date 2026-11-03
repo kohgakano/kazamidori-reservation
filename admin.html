@@ -196,6 +196,7 @@
       <button id="tabSettingsClosed" class="settings-tab-btn active" onclick="switchSettingsTab('closed')">定休日</button>
       <button id="tabSettingsLimits" class="settings-tab-btn inactive" onclick="switchSettingsTab('limits')">上限設定</button>
       <button id="tabSettingsRecurring" class="settings-tab-btn inactive" onclick="switchSettingsTab('recurring')">毎週</button>
+      <button id="tabSettingsStats" class="settings-tab-btn inactive" onclick="switchSettingsTab('stats')">集計</button>
     </div>
     <div id="settingsTabClosed">
       <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text)">定休日</div>
@@ -204,6 +205,16 @@
         style="width:100%;background:var(--teal);color:#fff;border:none;border-radius:8px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:16px">
         保存する
       </button>
+    </div>
+    <div id="settingsTabStats" style="display:none">
+      <div style="font-size:12px;color:var(--sub);margin-bottom:10px;line-height:1.6">来院予定日が期間内の、受付とキャンセルを集計します。記録は、この機能を入れた日から始まります。</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+        <input type="date" id="statsFrom" style="flex:1;min-width:0;padding:8px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:var(--font);font-size:14px">
+        <span>〜</span>
+        <input type="date" id="statsTo" style="flex:1;min-width:0;padding:8px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:var(--font);font-size:14px">
+      </div>
+      <button onclick="loadCancelStats()" style="width:100%;background:var(--teal);color:#fff;border:none;border-radius:8px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">集計する</button>
+      <div id="statsResult" style="margin-top:14px"></div>
     </div>
     <div id="settingsTabRecurring" style="display:none">
       <div style="font-size:12px;color:var(--sub);margin-bottom:10px;line-height:1.6">コード「定期」で受付した人の、毎週の受付です。毎月1日の朝に、その月の分がまとめて作られます。停止すると、明日以降の分も取り消されます。</div>
@@ -771,11 +782,56 @@ function switchSettingsTab(tab) {
   document.getElementById('settingsTabClosed').style.display    = tab === 'closed' ? '' : 'none';
   document.getElementById('settingsTabLimits').style.display    = tab === 'limits' ? '' : 'none';
   document.getElementById('settingsTabRecurring').style.display = tab === 'recurring' ? '' : 'none';
+  document.getElementById('settingsTabStats').style.display     = tab === 'stats' ? '' : 'none';
+  document.getElementById('tabSettingsStats').className = `settings-tab-btn ${tab==='stats'?'active':'inactive'}`;
+  if (tab === 'stats' && !document.getElementById('statsFrom').value) { initStatsDates(); loadCancelStats(); }
   document.getElementById('tabSettingsClosed').className    = `settings-tab-btn ${tab==='closed'?'active':'inactive'}`;
   document.getElementById('tabSettingsLimits').className    = `settings-tab-btn ${tab==='limits'?'active':'inactive'}`;
   document.getElementById('tabSettingsRecurring').className = `settings-tab-btn ${tab==='recurring'?'active':'inactive'}`;
   if (tab === 'limits' && Object.keys(slotLimits).length === 0) loadLimitSettings();
   if (tab === 'recurring') loadRecurringList();
+}
+
+// ============================================================
+// キャンセル集計
+// ============================================================
+function ymd(d) { return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2); }
+function initStatsDates() {
+  const now = new Date();
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  document.getElementById('statsFrom').value = ymd(now);
+  document.getElementById('statsTo').value = ymd(tomorrow);
+}
+async function loadCancelStats() {
+  const from = document.getElementById('statsFrom').value;
+  const to   = document.getElementById('statsTo').value;
+  const box  = document.getElementById('statsResult');
+  if (!from || !to || from > to) { showToast('⚠️ 期間を正しく選んでください'); return; }
+  box.innerHTML = '<div class="loading"><div class="spinner"></div> 集計中…</div>';
+  try {
+    const res  = await fetch(`${GAS_URL}?action=getCancelStats&userId=${userId}&from=${from}&to=${to}`);
+    const d = await res.json();
+    if (d.error) { box.innerHTML = `<p style="color:#c0392b;font-size:14px">${escapeHtml(d.error)}</p>`; return; }
+    const rate = n => d.bookings ? (n / d.bookings * 100).toFixed(1) + '%' : '-';
+    const who = d.byWho || {};
+    const whoRows = Object.keys(who).map(k => `<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>${escapeHtml(k)}</span><span>${who[k]}件（${rate(who[k])}）</span></div>`).join('');
+    box.innerHTML = `
+      <div style="background:#f0f8f6;border:1.5px solid var(--teal-light);border-radius:8px;padding:12px">
+        <div style="display:flex;justify-content:space-between;font-size:14px;padding:3px 0"><span>受付件数</span><b>${d.bookings}件</b></div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;padding:3px 0"><span>キャンセル件数</span><b>${d.cancels}件</b></div>
+        <div style="display:flex;justify-content:space-between;font-size:16px;padding:6px 0 2px;border-top:1px solid var(--border);margin-top:4px"><span>キャンセル率</span><b style="color:#c0392b">${rate(d.cancels)}</b></div>
+        ${whoRows ? `<div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><div style="font-size:12px;color:var(--sub);margin-bottom:2px">キャンセルした人の内訳</div>${whoRows}</div>` : ''}
+      </div>
+      <div style="font-size:13px;font-weight:700;margin:14px 0 6px">キャンセル一覧（${d.list.length}件）</div>
+      ${d.list.length ? d.list.map(x => `
+        <div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px">
+          <div style="font-weight:700">${x.date.slice(5).replace('-','/')} ${x.time} ／ ${escapeHtml(x.name || '未入力')} 様</div>
+          <div style="color:var(--sub);font-size:12px">${escapeHtml(x.by)}${x.kind ? '（' + escapeHtml(x.kind) + '）' : ''} ・ ${escapeHtml(x.at)}</div>
+          ${x.reason ? `<div style="font-size:12px;margin-top:2px">📝 ${escapeHtml(x.reason)}</div>` : ''}
+        </div>`).join('') : '<p style="color:var(--sub);font-size:14px">この期間のキャンセルはありません。</p>'}`;
+  } catch(e) {
+    box.innerHTML = '<p style="color:#c0392b;font-size:14px">⚠️ 通信エラーが発生しました</p>';
+  }
 }
 
 // ============================================================
