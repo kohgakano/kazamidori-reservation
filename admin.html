@@ -47,6 +47,8 @@
   .week-table td { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); height: 36px; vertical-align: middle; }
   td.time-cell { background: #f7faf9; color: var(--sub); font-size: 11px; font-weight: 600; text-align: center; border-right: 2px solid var(--teal); white-space: nowrap; padding: 0 3px; }
   td.closed-cell { background: #1a1a1a; }
+  .week-table th.sub-th { font-size: 10px; font-weight: 600; padding: 3px 2px; background: #1f5f56; }
+  td.oxno { background: #f1f1f1; }
   td.today-bg { background: #fffdf0; }
   td.empty-cell { background: var(--empty); }
   .booking-cell { background: var(--booked); padding: 2px 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; transition: filter .15s; }
@@ -66,6 +68,12 @@
   .tl-time { width: 52px; flex-shrink: 0; background: #f7faf9; color: var(--sub); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; border-right: 2px solid var(--teal); padding: 4px 0; }
   .tl-content { flex: 1; display: flex; align-items: center; padding: 4px 8px; gap: 6px; flex-wrap: wrap; }
   .tl-empty { color: #cccccc; font-size: 12px; }
+  .tl-cols { flex: 1; display: flex; min-width: 0; }
+  .tl-col { flex: 1; min-width: 0; padding: 4px 6px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; justify-content: center; }
+  .tl-col:last-child { border-right: none; }
+  .tl-colhead { font-size: 12px; font-weight: 700; color: var(--teal); text-align: center; padding: 6px 0; }
+  .tl-add { cursor: pointer; color: var(--teal); font-size: 12px; font-weight: 700; padding: 3px 6px; border: 1.5px dashed var(--teal); border-radius: 4px; text-align: center; }
+  .tl-oxhint { color: #bbbbbb; font-size: 11px; text-align: center; }
   .tl-blocked { background: #1a1a1a; }
   .tl-blocked .tl-time { background: #111111; color: #555555; border-color: #333333; }
   .tl-blocked .tl-content { color: #555555; font-size: 11px; }
@@ -145,8 +153,8 @@
       <button class="nav-btn" onclick="openSymptomList()" style="background:rgba(255,255,255,.2)">🏥 症状</button>
       <button class="nav-btn" onclick="openSettings()">⚙️ 設定</button>
       <div class="view-tabs">
-        <button class="view-tab active" id="tabWeek" onclick="switchView('week')">週</button>
-        <button class="view-tab" id="tabDay" onclick="switchView('day')">日</button>
+        <button class="view-tab" id="tabWeek" onclick="switchView('week')">週</button>
+        <button class="view-tab active" id="tabDay" onclick="switchView('day')">日</button>
       </div>
     </div>
   </div>
@@ -322,7 +330,7 @@ const ADMIN_MENUS = [
 
 let userId             = null;
 let isAdmin            = false;
-let viewMode           = 'week';
+let viewMode           = 'day';   // 初期表示は「日」
 let offset             = 0;
 let allSlots           = {};
 let allGeneralClosed   = {};   // 一般閉（コード2）の時間 { 日付: [時間] }
@@ -415,69 +423,74 @@ function updateNavLabel(dates) {
   document.getElementById('btnPrev').disabled = (viewMode==='week' && offset<=0);
 }
 
+// 受付の種類：tx=施術（酸素のあとの施術を含む）／tr=トレーニング／ox=酸素ルーム
+function kindOf(r) { return isTr(r.menuId) ? 'tr' : (isOx(r.menuId) && !r.viaOxygen ? 'ox' : 'tx'); }
+const KIND_PRESET = { tx: 'normal', tr: 'training', ox: 'oxygen' };
+
 function renderWeek(dates) {
   const times = generateTimes();
   const today = formatDate(new Date());
-  let html = `<div class="week-wrap"><table class="week-table"><thead><tr><th class="time-col">時刻</th>`;
+  // 日付ごとに「施術・トレーニング・酸素ルーム」の3列
+  let html = `<div class="week-wrap"><table class="week-table"><thead><tr><th class="time-col" rowspan="2">時刻</th>`;
   dates.forEach(d => {
     const ds    = formatDate(d);
     const isHol = (allSlots[ds]?.[times[0]] || []).some(r => r.status === 'holiday');
     const cls   = (CLOSED_DAYS.includes(d.getDay()) || isHol) ? 'closed-col' : (ds===today ? 'today-col' : '');
-    html += `<th class="${cls}"><span class="day-num">${d.getDate()}</span><span class="day-name">${DAY_NAMES[d.getDay()]}</span></th>`;
+    html += `<th class="${cls}" colspan="3"><span class="day-num">${d.getMonth()+1}/${d.getDate()}</span><span class="day-name">${DAY_NAMES[d.getDay()]}</span></th>`;
+  });
+  html += '</tr><tr>';
+  dates.forEach(() => {
+    html += '<th class="sub-th" title="施術">施術</th><th class="sub-th" title="トレーニング">トレ</th><th class="sub-th" title="酸素ルーム">酸素</th>';
   });
   html += '</tr></thead><tbody>';
   times.forEach(time => {
+    const oxStarts = OXYGEN_TIMES.filter(t => t >= time && t < calcEndTime(time));   // この治療枠の中に始まる酸素ルーム
     html += `<tr><td class="time-cell">${time}</td>`;
     dates.forEach(d => {
-      const ds           = formatDate(d);
-      const isClosed     = CLOSED_DAYS.includes(d.getDay());
-      const isToday      = ds === today;
-      const reservations = allSlots[ds]?.[time] || [];
-      const isHoliday    = reservations.some(r => r.status === 'holiday');
-      const isBlocked    = reservations.some(r => r.status === 'blocked');
-      const isClosed2    = reservations.some(r => r.status === 'closed');
-
-      const offReal = (isClosed || isHoliday || isClosed2) ? reservations.filter(isRealRes) : [];
-      if (offReal.length) {
-        // 休みの日・枠に受付が入っている：受付を残したまま、目立つ色で「休」を表示
-        const click = offReal.length > 1 ? `showMultiList('${ds}','${time}')` : `showDetail('${offReal[0].id}')`;
-        html += `<td class="${isToday?'today-bg':''}"><div class="booking-cell" style="background:#c0392b;flex-direction:column;line-height:1.1" onclick="${click}">
-          <span style="font-size:9px;font-weight:700;color:#fff">⚠️休</span>
-          <span class="booking-name">${offReal.length > 1 ? offReal.length + '名' : escapeHtml(offReal[0].name || '未入力')}</span></div></td>`;
-      } else if (isClosed || isHoliday) {
-        html += `<td class="closed-cell"><div class="blocked-label" style="color:#888888">休</div></td>`;
-      } else if (isBlocked) {
-        html += `<td class="blocked-cell"><div class="blocked-label">🔒</div></td>`;
-      } else if (isClosed2) {
-        html += `<td class="blocked-cell"><div class="blocked-label" style="color:#e74c3c;font-size:9px">受付<br>終了</div></td>`;
-      } else if (reservations.length === 0) {
-        const gcMark = isGC(ds, time) ? '<div style="color:#e67e22;font-size:9px;font-weight:700;text-align:center;line-height:1.1">一般閉</div>' : '';
-        html += `<td class="empty-cell empty-clickable ${isToday?'today-bg':''}" onclick="openAdminBooking('${ds}','${time}')">${gcMark}</td>`;
-      } else {
-        const names   = reservations.map(r => r.name || '未入力');
-        const isMulti = reservations.length > 1;
-        if (isMulti) {
-          html += `<td class="${isToday?'today-bg':''}">
-            <div style="display:flex;flex-direction:column;height:100%">
-              <div class="booking-cell multi" style="flex:1" onclick="showMultiList('${ds}','${time}')">
-                <span class="booking-count" style="font-size:14px;font-weight:700">${countLabel(reservations)}</span>
-              </div>
-              <div style="background:#1a9e8a;height:10px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="openAdminBooking('${ds}','${time}')">
-                <span style="color:#fff;font-size:9px">＋</span>
-              </div>
-            </div></td>`;
+      const ds        = formatDate(d);
+      const isClosed  = CLOSED_DAYS.includes(d.getDay());
+      const isToday   = ds === today;
+      const all       = allSlots[ds]?.[time] || [];
+      const isHoliday = all.some(r => r.status === 'holiday');
+      const isBlocked = all.some(r => r.status === 'blocked');
+      const isClosed2 = all.some(r => r.status === 'closed');
+      const off       = isClosed || isHoliday || isClosed2;
+      ['tx', 'tr', 'ox'].forEach(kind => {
+        const list   = all.filter(r => isRealRes(r) && kindOf(r) === kind);
+        const label  = kind === 'tx';            // 休・受付終了などの文字は、施術の列だけに出す
+        const preset = KIND_PRESET[kind];
+        const canAdd = kind !== 'ox' || oxStarts.length > 0;
+        const addOnclick = canAdd ? `openAdminBooking('${ds}','${time}','${preset}')` : '';
+        const tdCls = isToday ? 'today-bg' : '';
+        if (off && list.length) {
+          // 休みの日・枠に受付が入っている：受付を残したまま、目立つ色で「休」を表示
+          const click = list.length > 1 ? `showMultiList('${ds}','${time}','${kind}')` : `showDetail('${list[0].id}')`;
+          html += `<td class="${tdCls}"><div class="booking-cell" style="background:#c0392b;flex-direction:column;line-height:1.1" onclick="${click}">
+            <span style="font-size:9px;font-weight:700;color:#fff">⚠️休</span>
+            <span class="booking-name">${list.length > 1 ? list.length + '名' : escapeHtml(list[0].name || '未入力')}</span></div></td>`;
+        } else if (isClosed || isHoliday) {
+          html += `<td class="closed-cell">${label ? '<div class="blocked-label" style="color:#888888">休</div>' : ''}</td>`;
+        } else if (isBlocked) {
+          html += `<td class="blocked-cell">${label ? '<div class="blocked-label">🔒</div>' : ''}</td>`;
+        } else if (isClosed2) {
+          html += `<td class="blocked-cell">${label ? '<div class="blocked-label" style="color:#e74c3c;font-size:9px">受付<br>終了</div>' : ''}</td>`;
+        } else if (list.length === 0) {
+          if (!canAdd) { html += `<td class="oxno ${tdCls}"></td>`; return; }
+          const gcMark = (label && isGC(ds, time)) ? '<div style="color:#e67e22;font-size:9px;font-weight:700;text-align:center;line-height:1.1">一般閉</div>' : '';
+          html += `<td class="empty-cell empty-clickable ${tdCls}" onclick="${addOnclick}">${gcMark}</td>`;
         } else {
-          html += `<td class="${isToday?'today-bg':''}">
-            <div style="display:flex;flex-direction:column;height:100%">
-              <div class="booking-cell" style="flex:1" onclick="showDetail('${reservations[0].id}')">
-                <span class="booking-name">${menuMark(reservations[0])}${names[0]}${reservations[0].status === 'waiting' ? ' ⏳' : ''}${reservations[0].ruleId ? ' 🔁' : ''}</span>
-              </div>
-              <div style="background:#1a9e8a;height:10px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="openAdminBooking('${ds}','${time}')">
-                <span style="color:#fff;font-size:9px">＋</span>
-              </div>
-            </div></td>`;
+          const first = list[0];
+          const nmText = escapeHtml(first.name || '未入力') + (first.status === 'waiting' ? ' ⏳' : '') + (first.ruleId ? ' 🔁' : '');
+          const nm = kind === 'ox'
+            ? `<span style="display:flex;flex-direction:column;align-items:center;line-height:1.15"><span style="font-size:9px;opacity:.85">${first.time}</span><span>${nmText}</span></span>`
+            : (first.viaOxygen ? '🫧→' : '') + nmText;
+          const body = list.length > 1
+            ? `<div class="booking-cell multi" style="flex:1" onclick="showMultiList('${ds}','${time}','${kind}')"><span class="booking-count" style="font-size:14px;font-weight:700">${countLabel(list)}</span></div>`
+            : `<div class="booking-cell" style="flex:1" onclick="showDetail('${first.id}')"><span class="booking-name">${nm}</span></div>`;
+          const bar = canAdd ? `<div style="background:#1a9e8a;height:10px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="${addOnclick}"><span style="color:#fff;font-size:9px">＋</span></div>` : '';
+          html += `<td class="${tdCls}"><div style="display:flex;flex-direction:column;height:100%">${body}${bar}</div></td>`;
         }
-      }
+      });
     });
     html += '</tr>';
   });
@@ -491,7 +504,9 @@ function renderDay(date) {
   const dateLabel = `${date.getMonth()+1}月${date.getDate()}日（${DAY_NAMES[date.getDay()]}）`;
   let html = `<div class="day-wrap">
     <div style="padding:4px 2px 8px;font-size:13px;font-weight:700;color:var(--sub)">${dateLabel}</div>
-    <div class="day-timeline">`;
+    <div class="day-timeline">
+      <div class="timeline-row" style="min-height:30px;background:#f7faf9"><div class="tl-time"></div>
+        <div class="tl-cols"><div class="tl-col tl-colhead">🩹 施術</div><div class="tl-col tl-colhead">💪 トレーニング</div><div class="tl-col tl-colhead">🫧 酸素ルーム</div></div></div>`;
   times.forEach(time => {
     const reservations = allSlots[ds]?.[time] || [];
     const isClosed     = CLOSED_DAYS.includes(date.getDay());
@@ -520,20 +535,35 @@ function renderDay(date) {
     } else if (isClosed2) {
       html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content" style="color:#e74c3c">🚫 受付終了</div></div>`;
     } else {
-      const cards = reservations.map(r => `
+      // 施術・トレーニング・酸素ルームを、横に3列で表示する
+      const cardHtml = r => `
         <div class="booking-card" onclick="showDetail('${r.id}')">
-          <span class="card-name">👤 ${menuMark(r)}${r.name || '未入力'}${r.status === 'waiting' ? '（待ち）' : ''}${r.ruleId ? ' 🔁' : ''}</span>
+          <span class="card-name">👤 ${menuMark(r)}${escapeHtml(r.name || '未入力')}${r.status === 'waiting' ? '（待ち）' : ''}${r.ruleId ? ' 🔁' : ''}</span>
           <span class="card-menu">${menuLine(r)}</span>
           ${r.comment ? `<span class="card-menu">💬 ${escapeHtml(r.comment)}</span>` : ''}
-        </div>`).join('');
+        </div>`;
+      const cols = { tx: [], tr: [], ox: [] };
+      reservations.forEach(r => { cols[isTr(r.menuId) ? 'tr' : (isOx(r.menuId) && !r.viaOxygen ? 'ox' : 'tx')].push(r); });
+      // 酸素ルームの開始時間が、この治療枠の中にあるか（ある行だけ酸素の追加ができる）
+      const slotEnd = calcEndTime(time);
+      const oxStarts = OXYGEN_TIMES.filter(t => t >= time && t < slotEnd);
+      const txCol = cols.tx.map(cardHtml).join('')
+        + `<div class="tl-add" onclick="openAdminBooking('${ds}','${time}','normal')">＋ 追加</div>`;
+      const trCol = cols.tr.map(cardHtml).join('')
+        + `<div class="tl-add" onclick="openAdminBooking('${ds}','${time}','training')">＋ 追加</div>`;
+      const oxCol = cols.ox.map(cardHtml).join('')
+        + (oxStarts.length
+            ? `<div class="tl-add" onclick="openAdminBooking('${ds}','${time}','oxygen')">＋ ${oxStarts.join('・')} 開始</div>`
+            : (cols.ox.length ? '' : '<div class="tl-oxhint">－</div>'));
       html += `<div class="timeline-row">
         <div class="tl-time">${time}</div>
-        <div class="tl-content">
-          ${isGC(ds, time) ? '<div style="color:#e67e22;font-size:12px;font-weight:700;margin-bottom:4px">🟠 一般閉（即のみ受付）</div>' : ''}
-          ${reservations.length === 0
-            ? `<span class="tl-empty" style="cursor:pointer;color:var(--teal)" onclick="openAdminBooking('${ds}','${time}')">＋ 当日受付を追加</span>`
-            : cards + `<div style="cursor:pointer;color:var(--teal);font-size:12px;font-weight:700;padding:4px 8px;border:1.5px dashed var(--teal);border-radius:4px" onclick="openAdminBooking('${ds}','${time}')">＋ 追加</div>`
-          }
+        <div class="tl-cols">
+          <div class="tl-col">
+            ${isGC(ds, time) ? '<div style="color:#e67e22;font-size:11px;font-weight:700">🟠 一般閉（即のみ受付）</div>' : ''}
+            ${txCol}
+          </div>
+          <div class="tl-col">${trCol}</div>
+          <div class="tl-col">${oxCol}</div>
         </div>
       </div>`;
     }
@@ -555,8 +585,8 @@ function showDetail(reservationId) {
   document.getElementById('modalOverlay').classList.add('open');
 }
 
-function showMultiList(date, time) {
-  const reservations = (allSlots[date]?.[time] || []).filter(isRealRes);
+function showMultiList(date, time, kind) {
+  const reservations = (allSlots[date]?.[time] || []).filter(isRealRes).filter(r => !kind || kindOf(r) === kind);
   if (reservations.length === 0) return;
   const dateLabel = formatDateJapanese(new Date(date));
   const endTime   = calcEndTime(time);
@@ -624,7 +654,7 @@ async function cancelFromAdmin(reservationId, scope) {
   }
 }
 
-function openAdminBooking(date, time) {
+function openAdminBooking(date, time, presetMenu) {
   adminSelectedDate = date;
   adminSelectedTime = time;
   adminFormData = { name: '', menuId: '', conditionId: '', oxTime: '' };
@@ -637,6 +667,14 @@ function openAdminBooking(date, time) {
   renderAdminMenuBtns();
   validateAdminForm();
   document.getElementById('adminBookingPanel').classList.add('open');
+  if (presetMenu) {
+    selectAdminMenu(presetMenu);
+    // 酸素ルームは、この枠の中に開始時間が1つだけなら、それを最初から選んでおく
+    if (presetMenu === 'oxygen') {
+      const starts = OXYGEN_TIMES.filter(t => t >= time && t < calcEndTime(time));
+      if (starts.length === 1) selectAdminOxTime(starts[0]);
+    }
+  }
 }
 
 function closeAdminPanel() { document.getElementById('adminBookingPanel').classList.remove('open'); }
