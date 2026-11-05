@@ -177,6 +177,10 @@
       <div class="field-lbl">🩹 施術メニュー<span class="req-badge">必須</span></div>
       <div class="btn-row-admin" id="adminMenuBtns"></div>
     </div>
+    <div id="adminOxygenArea" style="display:none">
+      <div class="field-lbl">🫧 酸素ルームの開始時間（1時間）<span class="req-badge">必須</span></div>
+      <div class="btn-row-admin" id="adminOxygenBtns"></div>
+    </div>
     <div id="adminConditionArea" style="display:none">
       <div class="field-lbl">💬 現在の症状<span class="req-badge">必須</span></div>
       <div class="btn-row-admin" id="adminConditionBtns"></div>
@@ -291,7 +295,15 @@ const DAY_END       = 24;
 let   CLOSED_DAYS   = [];
 const DAY_NAMES     = ['日','月','火','水','木','金','土'];
 
-const MENU_LABELS = { normal: '通常施術', other_part: '前回とは違う部位', maintenance: 'メンテナンス' };
+const MENU_LABELS = { normal: '通常施術', other_part: '前回とは違う部位', maintenance: 'メンテナンス', training: 'トレーニング', oxygen: '酸素ルーム' };
+const OXYGEN_TIMES = ['09:00','10:15','11:30','14:00','15:15','16:30','17:45','19:15','20:30','21:45'];  // 酸素ルームの開始時間（1時間）
+function isOx(m) { return String(m || '').split('+')[0] === 'oxygen'; }
+function isTr(m) { return String(m || '').split('+')[0] === 'training'; }
+function addMin(time, n) { const [h,m] = time.split(':').map(Number); const t = h*60+m+n; return `${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`; }
+// 受付の終了時刻（酸素ルーム・トレーニングは1時間）
+function endFor(menuId, time) { return (isOx(menuId) || isTr(menuId)) ? addMin(time, 60) : calcEndTime(time); }
+// カレンダーの目印（酸素ルームは開始時刻も表示。酸素のあとの施術は 🫧→）
+function menuMark(r) { return r.viaOxygen ? '🫧→' : (isOx(r.menuId) ? '🫧' + r.time + ' ' : (isTr(r.menuId) ? '💪' : '')); }
 const COND_LABELS = {
   normal: { better: '😊 良くなっている', same: '😐 変わらない', worse: '😟 悪化している' }
 };
@@ -304,6 +316,8 @@ const ADMIN_MENUS = [
       { id: 'worse',  icon: '😟', label: '悪化している'   },
     ]
   },
+  { id: 'training', icon: '💪', label: 'トレーニング', conditions: [] },
+  { id: 'oxygen',   icon: '🫧', label: '酸素ルーム',   conditions: [] },
 ];
 
 let userId             = null;
@@ -312,7 +326,7 @@ let viewMode           = 'week';
 let offset             = 0;
 let allSlots           = {};
 let allGeneralClosed   = {};   // 一般閉（コード2）の時間 { 日付: [時間] }
-let adminFormData      = { name: '', menuId: '', conditionId: '' };
+let adminFormData      = { name: '', menuId: '', conditionId: '', oxTime: '' };
 let adminSelectedDate  = null;
 let adminSelectedTime  = null;
 let settingsClosedDays = [];
@@ -456,7 +470,7 @@ function renderWeek(dates) {
           html += `<td class="${isToday?'today-bg':''}">
             <div style="display:flex;flex-direction:column;height:100%">
               <div class="booking-cell" style="flex:1" onclick="showDetail('${reservations[0].id}')">
-                <span class="booking-name">${names[0]}${reservations[0].status === 'waiting' ? ' ⏳' : ''}${reservations[0].ruleId ? ' 🔁' : ''}</span>
+                <span class="booking-name">${menuMark(reservations[0])}${names[0]}${reservations[0].status === 'waiting' ? ' ⏳' : ''}${reservations[0].ruleId ? ' 🔁' : ''}</span>
               </div>
               <div style="background:#1a9e8a;height:10px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="openAdminBooking('${ds}','${time}')">
                 <span style="color:#fff;font-size:9px">＋</span>
@@ -508,7 +522,7 @@ function renderDay(date) {
     } else {
       const cards = reservations.map(r => `
         <div class="booking-card" onclick="showDetail('${r.id}')">
-          <span class="card-name">👤 ${r.name || '未入力'}${r.status === 'waiting' ? '（待ち）' : ''}${r.ruleId ? ' 🔁' : ''}</span>
+          <span class="card-name">👤 ${menuMark(r)}${r.name || '未入力'}${r.status === 'waiting' ? '（待ち）' : ''}${r.ruleId ? ' 🔁' : ''}</span>
           <span class="card-menu">${menuLine(r)}</span>
           ${r.comment ? `<span class="card-menu">💬 ${escapeHtml(r.comment)}</span>` : ''}
         </div>`).join('');
@@ -570,7 +584,7 @@ function renderModal(r) {
   const dateLabel = formatDateJapanese(new Date(r.date));
   document.getElementById('detailGrid').innerHTML = `
     <div class="detail-row"><span class="detail-key">📅 日付</span><span class="detail-val">${dateLabel}</span></div>
-    <div class="detail-row"><span class="detail-key">🕐 時間</span><span class="detail-val">${r.time}〜${calcEndTime(r.time)}</span></div>
+    <div class="detail-row"><span class="detail-key">🕐 時間</span><span class="detail-val">${r.viaOxygen ? '酸素 ' + r.viaOxygen + '〜のあと（' + r.time + '〜の治療枠）' : (isOx(r.menuId) ? r.time + ' 開始' : r.time + '〜' + (r.endTime || endFor(r.menuId, r.time)))}</span></div>
     <div class="detail-row"><span class="detail-key">👤 氏名</span><span class="detail-val">${r.name || '未入力'}</span></div>
     <div class="detail-row"><span class="detail-key">🩹 施術</span><span class="detail-val">${getMenuLabel(r.menuId)}</span></div>
     ${r.conditionId ? `<div class="detail-row"><span class="detail-key">💬 症状</span><span class="detail-val">${getCondLabel(r.menuId, r.conditionId)}</span></div>` : ''}
@@ -613,9 +627,10 @@ async function cancelFromAdmin(reservationId, scope) {
 function openAdminBooking(date, time) {
   adminSelectedDate = date;
   adminSelectedTime = time;
-  adminFormData = { name: '', menuId: '', conditionId: '' };
+  adminFormData = { name: '', menuId: '', conditionId: '', oxTime: '' };
   document.getElementById('adminInputName').value = '';
   document.getElementById('adminConditionArea').style.display = 'none';
+  document.getElementById('adminOxygenArea').style.display = 'none';
   const d = new Date(date);
   document.getElementById('adminPanelBadge').textContent =
     `📅 ${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}） 　🕐 ${time}〜${calcEndTime(time)}`;
@@ -635,11 +650,21 @@ function renderAdminMenuBtns() {
 }
 
 function selectAdminMenu(id) {
-  adminFormData.menuId = id; adminFormData.conditionId = '';
+  adminFormData.menuId = id; adminFormData.conditionId = ''; adminFormData.oxTime = '';
   renderAdminMenuBtns(); renderAdminConditionBtns();
-  document.getElementById('adminConditionArea').style.display = '';
+  const menu = ADMIN_MENUS.find(m => m.id === id);
+  document.getElementById('adminConditionArea').style.display = (menu && menu.conditions.length) ? '' : 'none';
+  document.getElementById('adminOxygenArea').style.display = id === 'oxygen' ? '' : 'none';
+  if (id === 'oxygen') renderAdminOxygenBtns();
   validateAdminForm();
 }
+function renderAdminOxygenBtns() {
+  document.getElementById('adminOxygenBtns').innerHTML = OXYGEN_TIMES.map(t => `
+    <button class="sel-btn-admin ${adminFormData.oxTime===t?'selected':''}" style="flex:0 0 calc(20% - 6px)" onclick="selectAdminOxTime('${t}')">
+      <span class="sb-label">${t}</span><span style="font-size:10px;color:var(--sub)">開始</span>
+    </button>`).join('');
+}
+function selectAdminOxTime(t) { adminFormData.oxTime = t; renderAdminOxygenBtns(); validateAdminForm(); }
 
 function renderAdminConditionBtns() {
   const menu = ADMIN_MENUS.find(m => m.id === adminFormData.menuId);
@@ -657,7 +682,9 @@ function selectAdminCondition(id) {
 
 function validateAdminForm() {
   adminFormData.name = document.getElementById('adminInputName').value.trim();
-  document.getElementById('btnAdminBook').disabled = !(adminFormData.name && adminFormData.menuId && adminFormData.conditionId);
+  const menu = ADMIN_MENUS.find(m => m.id === adminFormData.menuId);
+  const needCond = !!(menu && menu.conditions.length);
+  document.getElementById('btnAdminBook').disabled = !(adminFormData.name && adminFormData.menuId && (!needCond || adminFormData.conditionId) && (adminFormData.menuId !== 'oxygen' || adminFormData.oxTime));
 }
 
 async function submitAdminBooking() {
@@ -666,7 +693,7 @@ async function submitAdminBooking() {
   try {
     const params = new URLSearchParams({
       action: 'adminBook', userId,
-      date: adminSelectedDate, time: adminSelectedTime,
+      date: adminSelectedDate, time: adminFormData.menuId === 'oxygen' ? adminFormData.oxTime : adminSelectedTime,
       name: adminFormData.name, menuId: adminFormData.menuId, conditionId: adminFormData.conditionId,
     });
     const res  = await fetch(`${GAS_URL}?${params.toString()}`);
@@ -849,7 +876,7 @@ async function loadRecurringList() {
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f0f8f6;border:1.5px solid var(--teal-light);border-radius:8px;padding:10px 12px;margin-bottom:8px">
         <div style="min-width:0">
           <div style="font-size:14px;font-weight:700">🔁 ${escapeHtml(r.name || '未入力')} 様</div>
-          <div style="font-size:12px;color:var(--sub);margin-top:2px">毎週${DAY_NAMES[r.weekday]}曜 ${r.time}〜${calcEndTime(r.time)} ／ ${getMenuLabel(r.menuId)}</div>
+          <div style="font-size:12px;color:var(--sub);margin-top:2px">毎週${DAY_NAMES[r.weekday]}曜 ${isOx(r.menuId) ? r.time + ' 開始' : r.time + '〜' + endFor(r.menuId, r.time)} ／ ${getMenuLabel(r.menuId)}</div>
           <div style="font-size:12px;color:var(--sub)">今後${r.futureCount}件${r.nextDate ? '（次回 ' + r.nextDate.slice(5).replace('-','/') + '）' : ''}</div>
         </div>
         <button onclick="stopRecurring('${r.id}')" style="flex-shrink:0;background:#fff;color:#e74c3c;border:1.5px solid #e74c3c;border-radius:6px;padding:8px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">停止</button>
@@ -1025,9 +1052,11 @@ function escapeHtml(s) {
 }
 // 施術名（症状が空なら施術名だけ表示）
 function menuLine(r) {
+  if (r.viaOxygen) return `${getMenuLabel(r.menuId)}（酸素 ${r.viaOxygen}〜のあと）`;
+  if (isOx(r.menuId)) return `${getMenuLabel(r.menuId)}（${r.time} 開始）`;
   return r.conditionId ? `${getMenuLabel(r.menuId)} / ${getCondLabel(r.menuId, r.conditionId)}` : getMenuLabel(r.menuId);
 }
-function getMenuLabel(id)            { return MENU_LABELS[id] || id || '－'; }
+function getMenuLabel(id)            { const p = String(id || '').split('+').filter(x => x); return p.length ? p.map(x => MENU_LABELS[x] || x).join('＋') : '－'; }
 function getCondLabel(menuId, condId){ return COND_LABELS[menuId]?.[condId] || condId || '－'; }
 function showToast(msg) {
   const t = document.getElementById('toast');
