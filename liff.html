@@ -291,6 +291,7 @@
     <div>
       <div class="field-label">🩹 施術内容 <span class="req">必須</span></div>
       <div class="menu-list" id="menuList"></div>
+      <div id="oxTreatArea" style="display:none"></div>
     </div>
 
     <div>
@@ -393,14 +394,20 @@ const ADVANCE_CODE   = '風';   // 事前受付用コード：今日から7日�
 const ADVANCE_DAYS   = 7;
 const ADVANCE_CODE_BIRD = '鳥'; // 風と同じ事前受付。ただし一般閉の枠でも受付できる
 const isAdvance = c => c === ADVANCE_CODE || c === ADVANCE_CODE_BIRD;
-const PROMO_CODES    = ['事故', '即', RECURRING_CODE, ADVANCE_CODE, ADVANCE_CODE_BIRD];
+const OXYGEN_CODE    = '固定';  // 酸素ルーム用コード：毎週の固定受付（曜日と開始時間を選ぶ）
+const PROMO_CODES    = ['事故', '即', RECURRING_CODE, ADVANCE_CODE, ADVANCE_CODE_BIRD, OXYGEN_CODE];
+let OXYGEN_TIMES = ['09:00','10:15','11:30','14:00','15:15','16:30','17:45','19:15','20:30','21:45']; // 酸素ルームの開始時間（1時間）。サーバーの値で上書き
+const OXYGEN_MIN = 60, TRAINING_MIN = 60;
 
 // 施術内容（ここを編集して追加できます）
 const MENUS = [
   { id: 'normal',      icon: '🩹', label: '通常施術' },
   { id: 'other_part',  icon: '📍', label: '前回とは違う部位' },
   { id: 'maintenance', icon: '💆', label: 'メンテナンス' },
+  { id: 'training',    icon: '💪', label: 'トレーニング' },
+  { id: 'oxygen',      icon: '🫧', label: '酸素ルーム' },
 ];
+const OX_TREAT_MENUS = ['normal'];  // 酸素ルームと一緒に受けられる施術（通常施術のみ）
 
 const DAY_NAMES = ['日','月','火','水','木','金','土'];
 
@@ -423,6 +430,11 @@ let selectedMenu  = '';   // 選択中の施術内容
 let userName     = '';   // ステップ1で入力した名前
 let promoCode    = '';   // ステップ1で入力したコード（有効な場合のみ保持）
 let userComment  = '';   // ステップ1で入力したコメント
+let serverHasNew = true;   // サーバー（GAS）が新しい版か（トレーニング・酸素ルームの空き状況を返すか）
+let oxTreat      = [];   // 酸素ルームと一緒に受ける施術（複数選択）
+let trainingData = {};   // トレーニングの残り枠 { 'yyyy-MM-dd': { '10:00': 2, ... } }（-1=受付不可、0=満枠）
+let oxygenSlotsData = {};  // 酸素ルーム（コードなし）の状態 { 日付: { 時間: {c,ct,taken} } }
+let oxygenTaken  = {};   // 毎週の酸素ルームが入っている { 曜日: ['09:00', ...] }
 
 // ============================================================
 // 初期化
@@ -458,6 +470,9 @@ function goSlots() {
   userComment = document.getElementById('inputComment').value.trim();
   if (!userName) { showToast('名前を入力してください'); return; }
   if (!selectedMenu) { showToast('施術内容を選んでください'); return; }
+  if (selectedMenu !== 'oxygen' && promoCode === OXYGEN_CODE) { showToast('このコードは酸素ルーム専用です'); return; }
+  if (selectedMenu === 'oxygen' && promoCode !== OXYGEN_CODE) promoCode = '';   // 酸素ルームは、コードなし＝当日の1件のみ／「固定」＝毎週受付
+  if (selectedMenu === 'training') promoCode = '';   // トレーニングはコードなしで受付（コードの特例は使わない）
   document.getElementById('stepInfo').style.display = 'none';
   document.getElementById('mainContent').style.display = '';
   viewDate = formatDate(new Date());
@@ -517,6 +532,13 @@ async function fetchSlots() {
     waitingData   = data.waiting || {};
     generalClosed = data.generalClosed || {};
     fullSlots     = data.fullSlots || {};
+    trainingData  = data.training || {};
+    oxygenSlotsData = data.oxygenSlots || {};
+    serverHasNew  = !!data.training;
+    if (data.oxygen) {
+      if (Array.isArray(data.oxygen.times) && data.oxygen.times.length) OXYGEN_TIMES = data.oxygen.times;
+      oxygenTaken = data.oxygen.taken || {};
+    }
     if (Array.isArray(data.slotDefs) && data.slotDefs.length) {
       slotDefs = data.slotDefs.map(d => ({ time: d.time, end: d.endTime || d.end, promoOnly: !!d.promoOnly }));
     }
@@ -560,7 +582,7 @@ function renderTodaySlots(today) {
   html += `<div class="user-bar">
     <div>
       <div class="ub-main">👤 ${escapeHtml(userName)} 様</div>
-      ${isAdvance(promoCode) ? '<div class="ub-promo">🗓️ 事前受付（7日先まで・1週間に3件まで／あと' + Math.max(0, ADVANCE_MAX - advanceUsed) + '件）</div>' : promoCode === RECURRING_CODE ? '<div class="ub-promo">🔁 毎週受付（曜日と時間を選んでください）</div>' : (promoCode ? '<div class="ub-promo">🎟️ コード適用中（上限を超えて受付できます）</div>' : '')}
+      ${selectedMenu === 'oxygen' ? '<div class="ub-promo">' + (promoCode === OXYGEN_CODE ? '🫧 酸素ルーム（毎週の固定受付・1時間）' : '🫧 酸素ルーム（当日の1件・1時間）') + '</div>' : selectedMenu === 'training' ? '<div class="ub-promo">💪 トレーニング（1時間・同時2名まで）</div>' : isAdvance(promoCode) ? '<div class="ub-promo">🗓️ 事前受付（7日先まで・1週間に3件まで／あと' + Math.max(0, ADVANCE_MAX - advanceUsed) + '件）</div>' : promoCode === RECURRING_CODE ? '<div class="ub-promo">🔁 毎週受付（曜日と時間を選んでください）</div>' : (promoCode ? '<div class="ub-promo">🎟️ コード適用中（上限を超えて受付できます）</div>' : '')}
     </div>
     <button onclick="backToInfo()">‹ 入力に戻る</button>
   </div>`;
@@ -574,8 +596,8 @@ function renderTodaySlots(today) {
     }).join('') + '</div>';
   }
 
-  // 毎週受付（コード「定期」）：曜日と時間を選ぶ画面
-  if (promoCode === RECURRING_CODE) {
+  // 毎週受付（コード「定期」・酸素ルームの「固定」）：曜日と時間を選ぶ画面
+  if (promoCode === RECURRING_CODE || (selectedMenu === 'oxygen' && promoCode === OXYGEN_CODE)) {
     html += renderRecurringPicker();
     html += '</div>';
     document.getElementById('mainContent').innerHTML = html;
@@ -586,6 +608,62 @@ function renderTodaySlots(today) {
   if (isClosed || isHoliday) {
     html += `<div class="reception-closed-notice">🏖️ ${today === formatDate(new Date()) ? '本日' : 'この日'}は休業日です</div>`;
     html += '</div>';
+    document.getElementById('mainContent').innerHTML = html;
+    return;
+  }
+
+  // 新しいサーバーでないと、トレーニング・酸素ルームの空き状況が分からない
+  if ((selectedMenu === 'training' || selectedMenu === 'oxygen') && !serverHasNew) {
+    html += '<div class="reception-closed-notice">⚠️ 空き状況を取得できませんでした。<br>しばらくしてから、もう一度お試しください。</div></div>';
+    document.getElementById('mainContent').innerHTML = html;
+    return;
+  }
+
+  // 酸素ルーム（コードなし）：当日の1件のみ。開始の15分前まで・1枠1名
+  if (selectedMenu === 'oxygen') {
+    html += '<div class="slots-grid">';
+    OXYGEN_TIMES.forEach(time => {
+      const st = oxygenSlotsData[today]?.[time] || { c: 0, ct: 0, taken: 0 };
+      const startDt = new Date(today + 'T' + time + ':00');
+      const isPast = startDt.getTime() - 15 * 60000 < now.getTime();
+      const closed = oxTreat.length ? st.ct : st.c;
+      let cls, markCls, mark, canSelect = false;
+      if (isPast) { cls = 'past'; markCls = 'mark-past'; mark = '－'; }
+      else if (closed) { cls = 'closed-slot'; markCls = 'mark-closed'; mark = '受付終了'; }
+      else if (st.taken) { cls = 'full'; markCls = 'mark-full'; mark = '×'; }
+      else { cls = 'open'; markCls = 'mark-open'; mark = '○'; canSelect = true; }
+      const onclick = canSelect ? `onclick="selectSlot('${today}','${time}',this,false)"` : '';
+      html += `<div class="slot-item ${cls}" ${onclick} data-date="${today}" data-time="${time}">
+        <div class="slot-time">${time} 開始</div>
+        <div class="slot-mark ${markCls}">${mark}</div>
+        ${canSelect ? '<div style="font-size:11px;color:var(--sub)">残り1枠</div>' : ''}
+      </div>`;
+    });
+    html += '</div><div style="font-size:12px;color:var(--sub);margin-top:8px;line-height:1.6">時間は<b>開始時間</b>です（1時間利用できます）。開始の15分前まで受付できます。毎週受付する場合は、コード「固定」を入力してください。</div></div>';
+    document.getElementById('mainContent').innerHTML = html;
+    return;
+  }
+
+  // トレーニング：治療枠と同じ開始時間（1時間・2名まで・治療枠とは別枠）
+  if (selectedMenu === 'training') {
+    html += '<div class="slots-grid">';
+    slotDefs.forEach(def => {
+      const time = def.time;
+      const endDt = new Date(today + 'T' + calcEndTime(time) + ':00');
+      const left = trainingData[today]?.[time];
+      let cls, markCls, mark, sub = '', canSelect = false;
+      if (endDt <= now || def.promoOnly) { cls = 'past'; markCls = 'mark-past'; mark = '－'; }
+      else if (left === undefined || left < 0) { cls = 'closed-slot'; markCls = 'mark-closed'; mark = '受付終了'; }
+      else if (left === 0) { cls = 'full'; markCls = 'mark-full'; mark = '×'; }
+      else { cls = left <= 1 ? 'warn' : 'open'; markCls = left <= 1 ? 'mark-warn' : 'mark-open'; mark = left <= 1 ? '△' : '○'; canSelect = true; sub = `<div style="font-size:11px;color:var(--sub)">残り${left}枠</div>`; }
+      const onclick = canSelect ? `onclick="selectSlot('${today}','${time}',this,false)"` : '';
+      html += `<div class="slot-item ${cls}" ${onclick} data-date="${today}" data-time="${time}">
+        <div class="slot-time">${time}〜${endLabel(time)}</div>
+        <div class="slot-mark ${markCls}">${mark}</div>
+        ${sub}
+      </div>`;
+    });
+    html += '</div></div>';
     document.getElementById('mainContent').innerHTML = html;
     return;
   }
@@ -660,12 +738,14 @@ function renderRecurringPicker() {
     h += `<button type="button" class="wd-btn" data-wd="${i}" ${off ? 'disabled' : `onclick="selectRecurWeekday(${i},this)"`}>${n}${off ? '<div style="font-size:9px">休</div>' : ''}</button>`;
   });
   h += '</div><div class="pick-title">② 時間</div><div class="slots-grid">';
-  slotDefs.forEach(def => {
+  const isOx = selectedMenu === 'oxygen';
+  (isOx ? OXYGEN_TIMES.map(t => ({ time: t })) : slotDefs).forEach(def => {
     h += `<div class="slot-item open" data-time="${def.time}" onclick="selectRecurTime('${def.time}',this)">
-      <div class="slot-time">${def.time}〜${calcEndTime(def.time)}</div>
+      <div class="slot-time">${selectedMenu === 'oxygen' ? def.time + ' 開始' : def.time + '〜' + endLabel(def.time)}</div>
     </div>`;
   });
   h += '</div>';
+  if (isOx) h += '<div style="font-size:12px;color:var(--sub);margin-top:8px;line-height:1.6">時間は<b>開始時間</b>です（1時間利用できます）。開始の15分前まで受付できます。今日の開始15分前を過ぎている場合は、来週からの受付になります。すでに他の方が入っている曜日・時間は選べません。</div>';
   return h;
 }
 
@@ -673,7 +753,23 @@ function selectRecurWeekday(i, el) {
   recurWeekday = i;
   document.querySelectorAll('.wd-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
+  if (selectedMenu === 'oxygen') refreshOxygenTimes();
   openRecurPanel();
+}
+// 酸素ルーム：選んだ曜日で、すでに埋まっている時間は選べなくする
+function refreshOxygenTimes() {
+  const taken = oxygenTaken[recurWeekday] || [];
+  document.querySelectorAll('.slots-grid .slot-item').forEach(el => {
+    const t = el.dataset.time;
+    const isTaken = taken.includes(t);
+    el.classList.toggle('closed-slot', isTaken);
+    el.classList.toggle('open', !isTaken);
+    el.onclick = isTaken ? null : () => selectRecurTime(t, el);
+    const sub = el.querySelector('.slot-sub');
+    if (isTaken && !sub) el.insertAdjacentHTML('beforeend', '<div class="slot-sub" style="font-size:11px;color:#c0392b">埋まり</div>');
+    if (!isTaken && sub) sub.remove();
+    if (isTaken && recurTime === t) { recurTime = null; el.classList.remove('selected'); document.getElementById('bookingPanel').classList.remove('open'); }
+  });
 }
 
 function selectRecurTime(time, el) {
@@ -688,12 +784,12 @@ function openRecurPanel() {
   if (recurWeekday === null || !recurTime) return; // 曜日と時間の両方が決まったら確認を出す
   selectedIsWait = false;
   document.getElementById('selectedBadge').textContent =
-    `🔁 毎週${DAY_NAMES[recurWeekday]}曜日　🕐 ${recurTime}〜${calcEndTime(recurTime)}`;
-  const menuLabel = MENUS.find(m => m.id === selectedMenu)?.label || '';
+    `🔁 毎週${DAY_NAMES[recurWeekday]}曜日　🕐 ${timeLabel(recurTime)}`;
+  const menuLabel = menuLabelFull();
   const rows = [['👤 名前', userName + ' 様'], ['🩹 施術', menuLabel]];
   if (userComment) rows.push(['💬 コメント', userComment]);
   rows.push(['🎟️ コード', promoCode]);
-  rows.push(['🔁 毎週', `${DAY_NAMES[recurWeekday]}曜 ${recurTime}〜${calcEndTime(recurTime)}`]);
+  rows.push(['🔁 毎週', `${DAY_NAMES[recurWeekday]}曜 ${timeLabel(recurTime)}`]);
   document.getElementById('confirmList').innerHTML = rows.map(([k, v]) =>
     `<div class="confirm-row"><span class="cr-key">${k}</span><span class="cr-val">${escapeHtml(v)}</span></div>`
   ).join('');
@@ -740,10 +836,10 @@ function selectSlot(date, time, el, isWait) {
 
   const d = new Date(date + 'T00:00:00');
   document.getElementById('selectedBadge').textContent =
-    `📅 ${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）　🕐 ${time}〜${calcEndTime(time)}`;
+    `📅 ${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）　🕐 ${timeLabel(time)}`;
 
   // 入力内容の確認表示
-  const menuLabel = MENUS.find(m => m.id === selectedMenu)?.label || '';
+  const menuLabel = menuLabelFull();
   const rows = [
     ['👤 名前', userName + ' 様'],
     ['🩹 施術', menuLabel],
@@ -779,6 +875,9 @@ function onPromoInput() {
   if (!val) {
     hint.textContent = '';
     promoValid = false;
+  } else if (val === OXYGEN_CODE) {
+    hint.innerHTML = '<span class="promo-ok">✅ 酸素ルーム用のコードです（施術内容で「酸素ルーム」を選ぶと、毎週の曜日と時間を選べます）</span>';
+    promoValid = true;
   } else if (val === RECURRING_CODE) {
     hint.innerHTML = '<span class="promo-ok">✅ 毎週用のコードです（次の画面で曜日と時間を選びます。月末に継続確認が届きます）</span>';
     promoValid = true;
@@ -821,8 +920,27 @@ function renderMenuList() {
 
 function selectMenu(id) {
   selectedMenu = id;
+  if (id !== 'oxygen') oxTreat = [];
   renderMenuList();
+  renderOxTreat();
   validateInfo();
+}
+// 酸素ルームを選んだら、施術も一緒に受ける場合だけ選べる（複数選択）
+function renderOxTreat() {
+  const box = document.getElementById('oxTreatArea');
+  if (!box) return;
+  if (selectedMenu !== 'oxygen') { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  box.innerHTML = '<div class="field-label" style="margin-top:6px">＋ 施術も受ける場合</div>' +
+    '<div class="menu-list">' + OX_TREAT_MENUS.map(id => {
+      const m = MENUS.find(x => x.id === id);
+      return `<button type="button" class="menu-opt ${oxTreat.includes(id) ? 'selected' : ''}" onclick="toggleOxTreat('${id}')"><span class="mo-icon">${m.icon}</span><span>${m.label}</span></button>`;
+    }).join('') + '</div>' +
+    '<div style="font-size:12px;color:var(--sub);margin-top:6px;line-height:1.6">通常施術を選ぶと、酸素ルームのあとの時間に施術が自動で入ります。</div>';
+}
+function toggleOxTreat(id) {
+  oxTreat = oxTreat.includes(id) ? oxTreat.filter(x => x !== id) : oxTreat.concat(id);
+  renderOxTreat();
 }
 
 // ============================================================
@@ -843,7 +961,7 @@ async function submitBookingInner() {
   if (!name) { showToast('名前を入力してください'); return; }
   if (!selectedMenu) { showToast('施術内容を選んでください'); return; }
 
-  const isRecurPick = promo === RECURRING_CODE;
+  const isRecurPick = promo === RECURRING_CODE || (selectedMenu === 'oxygen' && promo === OXYGEN_CODE);
   if (isRecurPick && (recurWeekday === null || !recurTime)) { showToast('曜日と時間を選んでください'); return; }
 
   btn.disabled = true; btn.textContent = '送信中…';
@@ -852,7 +970,7 @@ async function submitBookingInner() {
     if (isRecurPick) {
       const rp = new URLSearchParams({
         action: 'bookRecurring', userId, weekday: String(recurWeekday), time: recurTime,
-        names: name, menuId: selectedMenu, comment, promoCode: promo,
+        names: name, menuId: menuIdForServer(), comment, promoCode: promo,
       });
       await fetch(`${GAS_URL}?${rp.toString()}`, { mode: 'no-cors' });
       await new Promise(r => setTimeout(r, 2500));
@@ -863,7 +981,7 @@ async function submitBookingInner() {
           await liff.sendMessages([{ type: 'text', text: `毎週確認 ${DAY_NAMES[wd]} ${tm}` }]);
         }
       } catch(e) {}
-      const menuLabel2 = MENUS.find(m => m.id === selectedMenu)?.label || '';
+      const menuLabel2 = menuLabelFull();
       closePanel();
       showDone({ date: null, time: tm, name, menuLabel: menuLabel2, comment, isWait: false, isRecurring: true, recurWd: wd });
       await loadTodaySlots();
@@ -875,7 +993,7 @@ async function submitBookingInner() {
       date: selectedDate,
       time: selectedTime,
       names: name,
-      menuId: selectedMenu,
+      menuId: menuIdForServer(),
       comment,
       promoCode: promo,
     });
@@ -889,7 +1007,7 @@ async function submitBookingInner() {
         await liff.sendMessages([{ type: 'text', text: `受付確認 ${sd.getMonth()+1}/${sd.getDate()} ${selectedTime}` }]);
       }
     } catch(e) { /* 送信できなくても受付自体は完了している */ }
-    const menuLabel = MENUS.find(m => m.id === selectedMenu)?.label || '';
+    const menuLabel = menuLabelFull();
     const doneInfo  = { date: selectedDate, time: selectedTime, name, menuLabel, comment, isWait: selectedIsWait, isRecurring: promo === RECURRING_CODE };
     closePanel();
     showDone(doneInfo);
@@ -914,7 +1032,7 @@ function showDone({ date, time, name, menuLabel, comment, isWait, isRecurring, r
     : `<p>📅 <span>${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）</span></p>`;
   document.getElementById('doneDetail').innerHTML = `
     ${dateRow}
-    <p>🕐 <span>${time}〜${calcEndTime(time)}</span></p>
+    <p>🕐 <span>${timeLabel(time)}</span></p>
     <p>👤 <span>${escapeHtml(name)} 様</span></p>
     <p>🩹 <span>${escapeHtml(menuLabel)}</span></p>
     ${comment ? `<p>💬 <span>${escapeHtml(comment)}</span></p>` : ''}
@@ -939,6 +1057,29 @@ function calcEndTime(time) {
   const [h,m] = time.split(':').map(Number);
   const t = h*60+m+SLOT_MIN;
   return `${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`;
+}
+// 受付の終了時刻（トレーニング・酸素ルームは1時間）
+function endLabel(time) {
+  if (selectedMenu === 'oxygen' || selectedMenu === 'training') {
+    const [h,m] = time.split(':').map(Number); const t = h*60+m+60;
+    return `${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`;
+  }
+  return calcEndTime(time);
+}
+// 時間の表示（酸素ルームは、いつ来てもよい時間と誤解されないよう「開始」だけ表示）
+function timeLabel(time) {
+  return selectedMenu === 'oxygen' ? `${time} 開始` : `${time}〜${endLabel(time)}`;
+}
+// 施術内容の表示名（酸素ルーム＋施術は「酸素ルーム＋通常施術」）
+function menuLabelFull() {
+  if (selectedMenu === 'oxygen') {
+    return ['酸素ルーム'].concat(oxTreat.map(id => MENUS.find(m => m.id === id)?.label || id)).join('＋');
+  }
+  return MENUS.find(m => m.id === selectedMenu)?.label || '';
+}
+// サーバーに送る施術ID（酸素ルーム＋施術は oxygen+normal+maintenance）
+function menuIdForServer() {
+  return selectedMenu === 'oxygen' ? ['oxygen'].concat(oxTreat).join('+') : selectedMenu;
 }
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
