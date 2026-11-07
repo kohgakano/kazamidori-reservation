@@ -434,6 +434,7 @@ let serverHasNew = true;   // サーバー（GAS）が新しい版か（トレ�
 let oxTreat      = [];   // 酸素ルームと一緒に受ける施術（複数選択）
 let trainingData = {};   // トレーニングの残り枠 { 'yyyy-MM-dd': { '10:00': 2, ... } }（-1=受付不可、0=満枠）
 let oxygenSlotsData = {};  // 酸素ルーム（コードなし）の状態 { 日付: { 時間: {c,ct,taken} } }
+let oxygenClosedWeekly = {};   // 酸素ルーム専用の受付終了 { '09:00': { 曜日: 1 } }
 let oxygenTaken  = {};   // 毎週の酸素ルームが入っている { 曜日: ['09:00', ...] }
 
 // ============================================================
@@ -538,6 +539,7 @@ async function fetchSlots() {
     if (data.oxygen) {
       if (Array.isArray(data.oxygen.times) && data.oxygen.times.length) OXYGEN_TIMES = data.oxygen.times;
       oxygenTaken = data.oxygen.taken || {};
+      oxygenClosedWeekly = data.oxygen.closedWeekly || {};
     }
     if (Array.isArray(data.slotDefs) && data.slotDefs.length) {
       slotDefs = data.slotDefs.map(d => ({ time: d.time, end: d.endTime || d.end, promoOnly: !!d.promoOnly }));
@@ -761,13 +763,14 @@ function refreshOxygenTimes() {
   const taken = oxygenTaken[recurWeekday] || [];
   document.querySelectorAll('.slots-grid .slot-item').forEach(el => {
     const t = el.dataset.time;
-    const isTaken = taken.includes(t);
+    const isStop  = oxygenClosedWeekly[t]?.[recurWeekday] === 1;   // この曜日・時間は酸素ルームを受け付けない
+    const isTaken = taken.includes(t) || isStop;
     el.classList.toggle('closed-slot', isTaken);
     el.classList.toggle('open', !isTaken);
     el.onclick = isTaken ? null : () => selectRecurTime(t, el);
     const sub = el.querySelector('.slot-sub');
-    if (isTaken && !sub) el.insertAdjacentHTML('beforeend', '<div class="slot-sub" style="font-size:11px;color:#c0392b">埋まり</div>');
-    if (!isTaken && sub) sub.remove();
+    if (sub) sub.remove();
+    if (isTaken) el.insertAdjacentHTML('beforeend', isStop ? '<div class="slot-sub" style="font-size:11px;color:#888">受付終了</div>' : '<div class="slot-sub" style="font-size:11px;color:#c0392b">埋まり</div>');
     if (isTaken && recurTime === t) { recurTime = null; el.classList.remove('selected'); document.getElementById('bookingPanel').classList.remove('open'); }
   });
 }
