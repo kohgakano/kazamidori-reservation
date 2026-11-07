@@ -208,12 +208,21 @@
       <button id="tabSettingsClosed" class="settings-tab-btn active" onclick="switchSettingsTab('closed')">定休日</button>
       <button id="tabSettingsLimits" class="settings-tab-btn inactive" onclick="switchSettingsTab('limits')">上限設定</button>
       <button id="tabSettingsRecurring" class="settings-tab-btn inactive" onclick="switchSettingsTab('recurring')">毎週</button>
+      <button id="tabSettingsOxygen" class="settings-tab-btn inactive" onclick="switchSettingsTab('oxygen')">酸素</button>
       <button id="tabSettingsStats" class="settings-tab-btn inactive" onclick="switchSettingsTab('stats')">集計</button>
     </div>
     <div id="settingsTabClosed">
       <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text)">定休日</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap" id="closedDayBtns"></div>
       <button id="btnSaveSettings" onclick="saveSettingsFromUI()"
+        style="width:100%;background:var(--teal);color:#fff;border:none;border-radius:8px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:16px">
+        保存する
+      </button>
+    </div>
+    <div id="settingsTabOxygen" style="display:none">
+      <div style="font-size:12px;color:var(--sub);margin-bottom:10px;line-height:1.6">酸素ルームだけを、曜日×開始時間で受付終了にします。チェックを入れた枠は、コードなしの当日受付も、コード「固定」の毎週受付も止まります（治療・トレーニングには影響しません）。すでに毎週で入っている人の、その枠の分は取り消されて、お知らせが届きます。</div>
+      <div id="oxygenCloseTable"><div class="loading"><div class="spinner"></div> 読み込み中…</div></div>
+      <button id="btnSaveOxygenClose" onclick="saveOxygenClose()"
         style="width:100%;background:var(--teal);color:#fff;border:none;border-radius:8px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:16px">
         保存する
       </button>
@@ -848,6 +857,9 @@ function switchSettingsTab(tab) {
   document.getElementById('settingsTabLimits').style.display    = tab === 'limits' ? '' : 'none';
   document.getElementById('settingsTabRecurring').style.display = tab === 'recurring' ? '' : 'none';
   document.getElementById('settingsTabStats').style.display     = tab === 'stats' ? '' : 'none';
+  document.getElementById('settingsTabOxygen').style.display    = tab === 'oxygen' ? '' : 'none';
+  document.getElementById('tabSettingsOxygen').className = `settings-tab-btn ${tab==='oxygen'?'active':'inactive'}`;
+  if (tab === 'oxygen') loadOxygenClose();
   document.getElementById('tabSettingsStats').className = `settings-tab-btn ${tab==='stats'?'active':'inactive'}`;
   if (tab === 'stats') { if (!document.getElementById('statsFrom').value) initStatsDates(); loadCancelStats(); }
   document.getElementById('tabSettingsClosed').className    = `settings-tab-btn ${tab==='closed'?'active':'inactive'}`;
@@ -855,6 +867,54 @@ function switchSettingsTab(tab) {
   document.getElementById('tabSettingsRecurring').className = `settings-tab-btn ${tab==='recurring'?'active':'inactive'}`;
   if (tab === 'limits' && Object.keys(slotLimits).length === 0) loadLimitSettings();
   if (tab === 'recurring') loadRecurringList();
+}
+
+// ============================================================
+// 酸素ルームの受付終了（曜日×開始時間）
+// ============================================================
+let oxCloseData = null;   // { times: [...], closed: { '09:00': { 0:0, 1:1, ... } } }
+const OX_DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const OX_DAY_LABEL = { 0: '日', 1: '月', 2: '火', 3: '水', 4: '木', 5: '金', 6: '土' };
+async function loadOxygenClose() {
+  const box = document.getElementById('oxygenCloseTable');
+  try {
+    const res  = await fetch(`${GAS_URL}?action=getOxygenClose&userId=${userId}`);
+    const data = await res.json();
+    if (!data.times) { box.innerHTML = '<div style="color:#c0392b;font-size:13px">⚠️ 読み込みに失敗しました（main.gsを最新にしてデプロイしてください）</div>'; return; }
+    oxCloseData = data;
+    renderOxygenClose();
+  } catch(e) {
+    box.innerHTML = '<div style="color:#c0392b;font-size:13px">⚠️ 通信エラーが発生しました</div>';
+  }
+}
+function renderOxygenClose() {
+  const { times, closed } = oxCloseData;
+  let h = '<table style="width:100%;border-collapse:collapse;font-size:13px;text-align:center"><thead><tr><th style="padding:6px 4px;text-align:left">開始</th>'
+        + OX_DAY_ORDER.map(dw => `<th style="padding:6px 2px">${OX_DAY_LABEL[dw]}</th>`).join('') + '</tr></thead><tbody>';
+  times.forEach(t => {
+    h += `<tr style="border-top:1px solid var(--border)"><td style="padding:8px 4px;text-align:left;font-weight:700">${t}</td>`
+       + OX_DAY_ORDER.map(dw => `<td><input type="checkbox" class="ox-close-cb" data-t="${t}" data-d="${dw}" style="width:20px;height:20px;accent-color:#c0392b" ${closed[t]?.[dw] ? 'checked' : ''}></td>`).join('') + '</tr>';
+  });
+  h += '</tbody></table><div style="font-size:11px;color:var(--sub);margin-top:8px">☑ ＝ その曜日・その開始時間は酸素ルームを受け付けない</div>';
+  document.getElementById('oxygenCloseTable').innerHTML = h;
+}
+async function saveOxygenClose() {
+  if (!oxCloseData) return;
+  const tbl = {};
+  oxCloseData.times.forEach(t => { tbl[t] = {}; });
+  document.querySelectorAll('.ox-close-cb').forEach(cb => { tbl[cb.dataset.t][cb.dataset.d] = cb.checked ? 1 : 0; });
+  const btn = document.getElementById('btnSaveOxygenClose');
+  btn.textContent = '保存中…'; btn.disabled = true;
+  try {
+    const params = new URLSearchParams({ action: 'saveOxygenClose', userId, closed: JSON.stringify(tbl) });
+    const res  = await fetch(`${GAS_URL}?${params.toString()}`);
+    const data = await res.json();
+    if (data.success) { oxCloseData.closed = tbl; showToast('✅ 酸素ルームの受付終了を保存しました'); }
+    else showToast('⚠️ ' + (data.message || data.error || '保存に失敗しました'));
+  } catch(e) {
+    showToast('⚠️ 通信エラーが発生しました');
+  }
+  btn.textContent = '保存する'; btn.disabled = false;
 }
 
 // ============================================================
