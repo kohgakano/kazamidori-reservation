@@ -226,6 +226,24 @@
         style="width:100%;background:var(--teal);color:#fff;border:none;border-radius:8px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:16px">
         保存する
       </button>
+      <div style="margin-top:22px;padding-top:14px;border-top:2px solid var(--border)">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">期間・日付を決めた受付終了</div>
+        <div style="font-size:12px;color:var(--sub);margin-bottom:10px;line-height:1.6">「12月だけ毎週水曜14:00」「11/10だけ全部」のような、期間限定の受付終了です。LINEで「12月だけ毎週水曜14:00 酸素受付終了」「11/10 酸素受付終了」と送っても設定できます（解除は「酸素受付再開」）。</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+          <select id="oxRuleWd" style="padding:8px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:var(--font);font-size:14px">
+            <option value="*">毎日（曜日を問わない）</option>
+            <option value="1">月曜</option><option value="2">火曜</option><option value="3">水曜</option><option value="4">木曜</option><option value="5">金曜</option><option value="6">土曜</option><option value="0">日曜</option>
+          </select>
+          <select id="oxRuleTime" style="padding:8px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:var(--font);font-size:14px"><option value="*">全時間</option></select>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+          <input type="date" id="oxRuleFrom" style="flex:1;min-width:0;padding:8px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:var(--font);font-size:14px">
+          <span>〜</span>
+          <input type="date" id="oxRuleTo" style="flex:1;min-width:0;padding:8px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:var(--font);font-size:14px">
+        </div>
+        <button id="btnAddOxRule" onclick="addOxygenRule()" style="width:100%;background:#c0392b;color:#fff;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font)">この期間を受付終了にする</button>
+        <div id="oxygenRuleList" style="margin-top:12px"></div>
+      </div>
     </div>
     <div id="settingsTabStats" style="display:none">
       <div style="font-size:12px;color:var(--sub);margin-bottom:10px;line-height:1.6">来院予定日が期間内の、受付とキャンセルを集計します。記録は、この機能を入れた日から始まります。</div>
@@ -883,6 +901,7 @@ async function loadOxygenClose() {
     if (!data.times) { box.innerHTML = '<div style="color:#c0392b;font-size:13px">⚠️ 読み込みに失敗しました（main.gsを最新にしてデプロイしてください）</div>'; return; }
     oxCloseData = data;
     renderOxygenClose();
+    renderOxygenRules();
   } catch(e) {
     box.innerHTML = '<div style="color:#c0392b;font-size:13px">⚠️ 通信エラーが発生しました</div>';
   }
@@ -897,6 +916,41 @@ function renderOxygenClose() {
   });
   h += '</tbody></table><div style="font-size:11px;color:var(--sub);margin-top:8px">☑ ＝ その曜日・その開始時間は酸素ルームを受け付けない</div>';
   document.getElementById('oxygenCloseTable').innerHTML = h;
+}
+function oxRuleLabel(r) {
+  const wd = r.weekday === '*' ? '毎日' : (r.weekday === 1 || r.weekday === 2 || r.weekday === 3 || r.weekday === 4 || r.weekday === 5 || r.weekday === 6 || r.weekday === 0 ? '毎週' + OX_DAY_LABEL[r.weekday] + '曜' : '');
+  const tm = r.time === '*' ? '全時間' : r.time + ' 開始';
+  const per = r.from && r.to ? (r.from === r.to ? r.from : r.from + '〜' + r.to) : (r.from ? r.from + 'から' : (r.to ? r.to + 'まで' : '期間なし'));
+  return `${wd}　${tm}　<span style="color:var(--sub)">${per}</span>`;
+}
+function renderOxygenRules() {
+  const sel = document.getElementById('oxRuleTime');
+  if (sel && oxCloseData && sel.options.length <= 1) oxCloseData.times.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t + ' 開始'; sel.appendChild(o); });
+  const rules = (oxCloseData && oxCloseData.rules) || [];
+  document.getElementById('oxygenRuleList').innerHTML = rules.length
+    ? rules.map(r => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:#fdf1ef;border-radius:8px;margin-bottom:6px;font-size:13px"><span>${oxRuleLabel(r)}</span><button onclick="deleteOxygenRule('${r.id}')" style="background:#fff;border:1px solid #c0392b;color:#c0392b;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);flex-shrink:0">解除</button></div>`).join('')
+    : '<div style="font-size:12px;color:var(--sub)">期間を決めた受付終了は、いまありません</div>';
+}
+async function addOxygenRule() {
+  const wd = document.getElementById('oxRuleWd').value, tm = document.getElementById('oxRuleTime').value;
+  const from = document.getElementById('oxRuleFrom').value, to = document.getElementById('oxRuleTo').value;
+  if (!from && !to) { showToast('期間（開始日か終了日）を入れてください'); return; }
+  const btn = document.getElementById('btnAddOxRule'); btn.disabled = true;
+  try {
+    const params = new URLSearchParams({ action: 'addOxygenRule', userId, weekday: wd, time: tm, from, to });
+    const res = await fetch(`${GAS_URL}?${params.toString()}`); const data = await res.json();
+    if (data.success) { showToast('✅ 受付終了を追加しました'); document.getElementById('oxRuleFrom').value = ''; document.getElementById('oxRuleTo').value = ''; await loadOxygenClose(); }
+    else showToast('⚠️ ' + (data.message || data.error || '追加に失敗しました'));
+  } catch(e) { showToast('⚠️ 通信エラーが発生しました'); }
+  btn.disabled = false;
+}
+async function deleteOxygenRule(id) {
+  try {
+    const params = new URLSearchParams({ action: 'deleteOxygenRule', userId, id });
+    const res = await fetch(`${GAS_URL}?${params.toString()}`); const data = await res.json();
+    if (data.success) { showToast('✅ 解除しました'); await loadOxygenClose(); }
+    else showToast('⚠️ ' + (data.message || data.error || '解除に失敗しました'));
+  } catch(e) { showToast('⚠️ 通信エラーが発生しました'); }
 }
 async function saveOxygenClose() {
   if (!oxCloseData) return;
@@ -944,7 +998,9 @@ async function loadCancelStats() {
       <div style="background:#f0f8f6;border:1.5px solid var(--teal-light);border-radius:8px;padding:12px">
         <div style="display:flex;justify-content:space-between;font-size:14px;padding:3px 0"><span>受付件数</span><b>${d.bookings}件</b></div>
         <div style="display:flex;justify-content:space-between;font-size:14px;padding:3px 0"><span>キャンセル件数</span><b>${d.cancels}件</b></div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;padding:3px 0"><span>時間変更件数</span><b>${d.changes || 0}件</b></div>
         <div style="display:flex;justify-content:space-between;font-size:16px;padding:6px 0 2px;border-top:1px solid var(--border);margin-top:4px"><span>キャンセル率</span><b style="color:#c0392b">${rate(d.cancels)}</b></div>
+        <div style="display:flex;justify-content:space-between;font-size:16px;padding:2px 0"><span>変更率</span><b style="color:#e67e00">${rate(d.changes || 0)}</b></div>
         ${whoRows ? `<div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><div style="font-size:12px;color:var(--sub);margin-bottom:2px">キャンセルした人の内訳</div>${whoRows}</div>` : ''}
       </div>
       <div style="font-size:13px;font-weight:700;margin:14px 0 6px">キャンセル一覧（${d.list.length}件）</div>
@@ -953,7 +1009,13 @@ async function loadCancelStats() {
           <div style="font-weight:700">${x.date.slice(5).replace('-','/')} ${x.time} ／ ${escapeHtml(x.name || '未入力')} 様</div>
           <div style="color:var(--sub);font-size:12px">${escapeHtml(x.by)}${x.kind ? '（' + escapeHtml(x.kind) + '）' : ''} ・ ${escapeHtml(x.at)}</div>
           ${x.reason ? `<div style="font-size:12px;margin-top:2px">📝 ${escapeHtml(x.reason)}</div>` : ''}
-        </div>`).join('') : '<p style="color:var(--sub);font-size:14px">この期間のキャンセルはありません。</p>'}`;
+        </div>`).join('') : '<p style="color:var(--sub);font-size:14px">この期間のキャンセルはありません。</p>'}
+      <div style="font-size:13px;font-weight:700;margin:14px 0 6px">時間変更一覧（${(d.changeList || []).length}件）</div>
+      ${(d.changeList || []).length ? d.changeList.map(x => `
+        <div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px">
+          <div style="font-weight:700">${x.date.slice(5).replace('-','/')} ${escapeHtml(x.change || x.time)} ／ ${escapeHtml(x.name || '未入力')} 様</div>
+          <div style="color:var(--sub);font-size:12px">患者本人${x.kind ? '（' + escapeHtml(x.kind) + '）' : ''} ・ ${escapeHtml(x.at)}</div>
+        </div>`).join('') : '<p style="color:var(--sub);font-size:14px">この期間の時間変更はありません。</p>'}`;
   } catch(e) {
     box.innerHTML = '<p style="color:#c0392b;font-size:14px">⚠️ 通信エラーが発生しました</p>';
   }
