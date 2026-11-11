@@ -388,21 +388,52 @@ let settingsClosedDays = [];
 let slotLimits         = {};
 let slotCodes          = {};   // 曜日×時間の標準コード {時間:{曜日:0|2|3}}
 
+// ログインが必要なとき・失敗したときの画面（PCのブラウザでも、ここから入り直せる）
+function showLoginScreen(message, detail) {
+  document.getElementById('mainContent').innerHTML = `
+    <div class="unauth">
+      <h2>🔑 ${message}</h2>
+      <p>${detail || ''}</p>
+      <button onclick="relogin()" style="margin-top:16px;background:var(--teal);color:#fff;border:none;border-radius:8px;padding:14px 22px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">LINEでログインし直す</button>
+    </div>`;
+}
+function relogin() {
+  try { sessionStorage.removeItem('adminLoginTried'); } catch(e) {}
+  try { if (liff.isLoggedIn()) liff.logout(); } catch(e) {}
+  liff.login({ redirectUri: location.href.split('?')[0].split('#')[0] });
+}
+
 async function init() {
-  try {
-    await liff.init({ liffId: LIFF_ID_ADMIN });
-    if (liff.isLoggedIn()) {
-      const p = await liff.getProfile();
-      userId = p.userId;
-    } else { liff.login(); return; }
-  } catch(e) { userId = 'TEST_ADMIN'; }
+  if (typeof liff === 'undefined') { userId = 'TEST_ADMIN'; }   // LIFFが読み込めない場合（開発用）
+  else {
+    try {
+      await liff.init({ liffId: LIFF_ID_ADMIN });
+      if (liff.isLoggedIn()) {
+        const p = await liff.getProfile();
+        userId = p.userId;
+        try { sessionStorage.removeItem('adminLoginTried'); } catch(e) {}
+      } else {
+        // PCのブラウザなど：LINEのログイン画面へ。戻ってきてもログインできなければ、ボタンの画面を出す（無限ループ防止）
+        let tried = false;
+        try { tried = sessionStorage.getItem('adminLoginTried') === '1'; sessionStorage.setItem('adminLoginTried', '1'); } catch(e) {}
+        if (!tried) { liff.login({ redirectUri: location.href.split('?')[0].split('#')[0] }); return; }
+        showLoginScreen('ログインが必要です', 'LINEでログインしてください。');
+        return;
+      }
+    } catch(e) {
+      // 以前は、ここで権限なしの画面になっていた。エラー内容を出して、ログインし直せるようにする
+      showLoginScreen('ログインできませんでした', 'ログインの有効期限が切れた可能性があります。下のボタンでログインし直してください。<br><span style="font-size:11px;color:#999">' + escapeHtml(String((e && e.message) || e)) + '</span>');
+      return;
+    }
+  }
 
   isAdmin = ADMIN_IDS.includes(userId);
   if (!isAdmin) {
     document.getElementById('mainContent').innerHTML = `
       <div class="unauth">
         <h2>⛔ アクセス権限がありません</h2>
-        <p>このページは管理者専用です。</p>
+        <p>このページは管理者専用です。<br>管理者のLINEアカウントでログインしているか、ご確認ください。</p>
+        <button onclick="relogin()" style="margin-top:16px;background:#fff;color:var(--teal);border:1.5px solid var(--teal);border-radius:8px;padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font)">別のアカウントでログインし直す</button>
       </div>`;
     return;
   }
