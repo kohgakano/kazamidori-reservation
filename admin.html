@@ -1039,11 +1039,53 @@ async function loadRecurringList() {
           <div style="font-size:12px;color:var(--sub);margin-top:2px">毎週${DAY_NAMES[r.weekday]}曜 ${isOx(r.menuId) ? r.time + ' 開始' : r.time + '〜' + endFor(r.menuId, r.time)} ／ ${getMenuLabel(r.menuId)}</div>
           <div style="font-size:12px;color:var(--sub)">今後${r.futureCount}件${r.nextDate ? '（次回 ' + r.nextDate.slice(5).replace('-','/') + '）' : ''}</div>
         </div>
-        <button onclick="stopRecurring('${r.id}')" style="flex-shrink:0;background:#fff;color:#e74c3c;border:1.5px solid #e74c3c;border-radius:6px;padding:8px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">停止</button>
-      </div>`).join('');
+        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+          <button onclick="openRecurChange('${r.id}',${r.weekday},'${r.time}',${isOx(r.menuId)})" style="background:#fff;color:var(--teal);border:1.5px solid var(--teal);border-radius:6px;padding:8px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">変更</button>
+          <button onclick="stopRecurring('${r.id}')" style="background:#fff;color:#e74c3c;border:1.5px solid #e74c3c;border-radius:6px;padding:8px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">停止</button>
+        </div>
+      </div>
+      <div id="recurChange_${r.id}" style="display:none;background:#fff;border:1.5px solid var(--teal);border-radius:8px;padding:10px 12px;margin:-4px 0 8px"></div>`).join('');
   } catch(e) {
     box.innerHTML = '<p style="color:#e74c3c;padding:12px 0">読み込みに失敗しました</p>';
   }
+}
+
+// 毎週の曜日・時間を変更する（その場に曜日と時間の選択欄を開く）
+function openRecurChange(ruleId, wd, time, ox) {
+  const box = document.getElementById('recurChange_' + ruleId);
+  if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+  const times = ox ? OXYGEN_TIMES : generateTimes();
+  const sel = 'padding:8px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:var(--font);font-size:14px;width:100%';
+  box.innerHTML = `
+    <div style="font-size:12px;color:var(--sub);margin-bottom:8px;line-height:1.6">新しい曜日・時間を選んでください。明日以降の受付が作り直され、本人へLINEでお知らせします（今日までの分は、そのままです）。</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+      <select id="rcWd_${ruleId}" style="${sel}">${DAY_NAMES.map((n, i) => `<option value="${i}" ${i === wd ? 'selected' : ''}>毎週${n}曜</option>`).join('')}</select>
+      <select id="rcTm_${ruleId}" style="${sel}">${times.map(t => `<option value="${t}" ${t === time ? 'selected' : ''}>${ox ? t + ' 開始' : t + '〜' + endFor('normal', t)}</option>`).join('')}</select>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button onclick="saveRecurChange('${ruleId}')" id="rcBtn_${ruleId}" style="flex:1;background:var(--teal);color:#fff;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font)">この内容に変更する</button>
+      <button onclick="document.getElementById('recurChange_${ruleId}').style.display='none'" style="background:#fff;border:1.5px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px;cursor:pointer;font-family:var(--font)">閉じる</button>
+    </div>`;
+  box.style.display = '';
+}
+async function saveRecurChange(ruleId) {
+  const wd = document.getElementById('rcWd_' + ruleId).value, tm = document.getElementById('rcTm_' + ruleId).value;
+  const btn = document.getElementById('rcBtn_' + ruleId);
+  if (!confirm(`毎週${DAY_NAMES[wd]}曜 ${tm} に変更しますか？\n（明日以降の受付が作り直され、本人へLINE通知が送られます）`)) return;
+  btn.disabled = true; btn.textContent = '変更中…';
+  try {
+    const res  = await fetch(`${GAS_URL}?action=adminChangeRecurring&userId=${userId}&ruleId=${encodeURIComponent(ruleId)}&weekday=${wd}&time=${encodeURIComponent(tm)}`);
+    const data = await res.json();
+    if (data.success) {
+      const sk = (data.skipped || []).length;
+      showToast(`✅ 変更しました（${data.created}件を作成${sk ? '・' + sk + '件は受付できず' : ''}）`);
+      await loadRecurringList();
+      await loadAndRender();
+    } else {
+      showToast('⚠️ ' + (data.message || '変更に失敗しました'));
+      btn.disabled = false; btn.textContent = 'この内容に変更する';
+    }
+  } catch(e) { showToast('⚠️ 通信エラーが発生しました'); btn.disabled = false; btn.textContent = 'この内容に変更する'; }
 }
 
 async function stopRecurring(ruleId) {
