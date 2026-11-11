@@ -382,7 +382,7 @@ const DEFAULT_SLOT_DEFS = (() => {
   for (let m = 9 * 60; m < 23 * 60; m += 30) out.push({ time: fmt(m), end: fmt(m + 30) });
   return out;
 })();
-const WARN_THRESHOLD = 2;  // 残り△表示の閾値
+const WARN_THRESHOLD = 1;  // 残り△表示の閾値（残りがこの数以下なら△。上限2の運用に合わせて1）
 // 有効なプロモーションコード（入力すると上限を超えて受付できる。休みの枠は不可）
 const RECURRING_CODE = '定期'; // 毎週の受付用コード（選んだ曜日・時間で毎週受付）
 const ADVANCE_CODE   = '風';   // 事前受付用コード：今日から7日先まで受付できる（枠は一般扱い・1週間に3件まで）
