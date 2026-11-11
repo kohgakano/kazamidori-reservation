@@ -324,7 +324,7 @@
   <div class="outside-icon">🌙</div>
   <h2>受付時間外です</h2>
   <div class="next-open-badge" id="nextOpenBadge"></div>
-  <p>受付時間：毎日 7:00〜23:00<br>時間内に再度お越しください。</p>
+  <p id="outsideHours">受付時間：毎日 5:30〜22:00<br>時間内に再度お越しください。</p>
 </div>
 
 <!-- 下部スライドパネル -->
@@ -370,8 +370,9 @@ const GAS_URL        = 'https://script.google.com/macros/s/AKfycbw-JsEZlCOe6FeIt
 const LIFF_ID        = '2010369051-b9OGqRDi';
 const MAX_PER_SLOT   = 5;
 const SLOT_MIN       = 60; // 1時間刻み
-const HOUR_OPEN      = 7;  // 受付開始（この時間から予約できる）
-const HOUR_CLOSE     = 23; // 受付終了（この時間以降は受付時間外）
+const OPEN_AT        = '5:30';   // 受付開始（この時刻から予約できる）
+const CLOSE_AT       = '22:00';  // 受付終了（この時刻以降は受付時間外）
+const toMin = s => { const m = String(s).split(':'); return Number(m[0]) * 60 + Number(m[1] || 0); };
 const MAX_TOTAL_DEFAULT = 8; // 1枠で受け付ける最大件数（プロモ・一般・待ちの合計）
 // 受付枠（サーバーの値を優先。取得できない場合のデフォルト）
 // 8:30〜23:00を30分・60分の枠に分けている。8:30はコード専用。
@@ -451,8 +452,8 @@ async function init() {
 
   // 受付時間チェック
   const now  = new Date();
-  const hour = now.getHours();
-  if (hour < HOUR_OPEN || hour >= HOUR_CLOSE) {
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  if (nowMin < toMin(OPEN_AT) || nowMin >= toMin(CLOSE_AT)) {
     showOutsideScreen();
     return;
   }
@@ -493,13 +494,14 @@ function backToInfo() {
 
 function showOutsideScreen() {
   const now = new Date();
-  const hour = now.getHours();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
   let msg;
-  if (hour >= HOUR_CLOSE) {
-    msg = `次の受付開始：翌朝 ${HOUR_OPEN}:00`;
+  if (nowMin >= toMin(CLOSE_AT)) {
+    msg = `次の受付開始：翌朝 ${OPEN_AT}`;
   } else {
-    msg = `本日の受付開始：${HOUR_OPEN}:00`;
+    msg = `本日の受付開始：${OPEN_AT}`;
   }
+  document.getElementById('outsideHours').innerHTML = `受付時間：毎日 ${OPEN_AT}〜${CLOSE_AT}<br>時間内に再度お越しください。`;
   document.getElementById('nextOpenBadge').textContent = '🕐 ' + msg;
   document.getElementById('outsideScreen').classList.add('open');
 }
