@@ -392,7 +392,7 @@ const isAdvance = c => c === ADVANCE_CODE || c === ADVANCE_CODE_BIRD;
 const OXYGEN_CODE    = '固定';  // 酸素ルーム用コード：毎週の固定受付（曜日と開始時間を選ぶ）
 const PROMO_CODES    = ['事故', '即', RECURRING_CODE, ADVANCE_CODE, ADVANCE_CODE_BIRD, OXYGEN_CODE];
 let OXYGEN_TIMES = ['09:00','10:15','11:30','14:00','15:15','16:30','17:45','19:15','20:30','21:45']; // 酸素ルームの開始時間（1時間）。サーバーの値で上書き
-const OXYGEN_MIN = 60, TRAINING_MIN = 60;
+const OXYGEN_MIN = 60, TRAINING_MIN = 30;
 
 // 施術内容（ここを編集して追加できます）
 const MENUS = [
@@ -580,7 +580,7 @@ function renderTodaySlots(today) {
   html += `<div class="user-bar">
     <div>
       <div class="ub-main">👤 ${escapeHtml(userName)} 様</div>
-      ${selectedMenu === 'oxygen' ? '<div class="ub-promo">' + (promoCode === OXYGEN_CODE ? '🫧 酸素ルーム（毎週の固定受付・1時間）' : '🫧 酸素ルーム（当日の1件・1時間）') + '</div>' : selectedMenu === 'training' ? '<div class="ub-promo">💪 トレーニング（1時間・同時2名まで）</div>' : isAdvance(promoCode) ? '<div class="ub-promo">🗓️ 事前受付（7日先まで・1週間に3件まで／あと' + Math.max(0, ADVANCE_MAX - advanceUsed) + '件）</div>' : promoCode === RECURRING_CODE ? '<div class="ub-promo">🔁 毎週受付（曜日と時間を選んでください）</div>' : (promoCode ? '<div class="ub-promo">🎟️ コード適用中（上限を超えて受付できます）</div>' : '')}
+      ${selectedMenu === 'oxygen' ? '<div class="ub-promo">' + (promoCode === OXYGEN_CODE ? '🫧 酸素ルーム（毎週の固定受付・1時間）' : '🫧 酸素ルーム（当日の1件・1時間）') + '</div>' : selectedMenu === 'training' ? '<div class="ub-promo">💪 トレーニング（30分・同時2名まで）</div>' : isAdvance(promoCode) ? '<div class="ub-promo">🗓️ 事前受付（7日先まで・1週間に3件まで／あと' + Math.max(0, ADVANCE_MAX - advanceUsed) + '件）</div>' : promoCode === RECURRING_CODE ? '<div class="ub-promo">🔁 毎週受付（曜日と時間を選んでください）</div>' : (promoCode ? '<div class="ub-promo">🎟️ コード適用中（上限を超えて受付できます）</div>' : '')}
     </div>
     <button onclick="backToInfo()">‹ 入力に戻る</button>
   </div>`;
@@ -1059,8 +1059,8 @@ function calcEndTime(time) {
 }
 // 受付の終了時刻（トレーニング・酸素ルームは1時間）
 function endLabel(time) {
-  if (selectedMenu === 'oxygen' || selectedMenu === 'training') {
-    const [h,m] = time.split(':').map(Number); const t = h*60+m+60;
+  if (selectedMenu === 'oxygen') {
+    const [h,m] = time.split(':').map(Number); const t = h*60+m+OXYGEN_MIN;
     return `${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`;
   }
   return calcEndTime(time);
