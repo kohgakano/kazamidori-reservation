@@ -373,7 +373,7 @@ const SLOT_MIN       = 30; // 30分刻み
 const OPEN_AT        = '5:30';   // 受付開始（この時刻から予約できる）
 const CLOSE_AT       = '22:00';  // 受付終了（この時刻以降は受付時間外）
 const toMin = s => { const m = String(s).split(':'); return Number(m[0]) * 60 + Number(m[1] || 0); };
-const MAX_TOTAL_DEFAULT = 4; // 1枠で受け付ける最大件数（即・事故などのコードも、一般・待ちも含めた合計）
+const MAX_TOTAL_DEFAULT = 4; // 一般・待ちが止まる最大件数（即・事故のコードは超えて受付できる）
 // 受付枠（サーバーの値を優先。取得できない場合のデフォルト）
 // 8:30〜23:00を30分ごとの枠に分けている。8:30はコード専用。
 const DEFAULT_SLOT_DEFS = (() => {
@@ -684,7 +684,7 @@ function renderTodaySlots(today) {
     // 受付終了に設定された枠は、コードがあっても受付不可
     const isClosedSlot = (closedSlots[today] || []).includes(time);
     const isLimitZero  = limit === 0;                             // 上限0の枠（コードがあれば受付可）
-    const isFullTotal  = total >= maxTotal;                       // 最大件数に到達（コードがあっても受付不可）
+    const isFullTotal  = total >= maxTotal;                       // 最大件数に到達（コードがあれば受付可）
     const manualFull   = (fullSlots[today] || []).includes(time);   // 満枠（コード1）に設定された枠
     const remaining    = manualFull ? 0 : Math.max(0, limit - conf);   // 一般で受けられる残り
 
@@ -698,11 +698,8 @@ function renderTodaySlots(today) {
     } else if ((accidentOnly[today] || []).includes(time) && promoCode !== ACCIDENT_CODE) {
       // 事故のみの枠：事故のコード以外（即・一般・待ち・風・鳥）は受付不可
       cls = 'closed-slot'; markCls = 'mark-closed'; mark = promoCode ? '事故<br>のみ' : '受付終了';   // コードなしの方には、コードの存在を見せず「受付終了」と表示
-    } else if (isFullTotal) {
-      // 最大件数（即・事故などのコードも含めた合計）に到達：コードがあっても受付不可
-      cls = 'full'; markCls = 'mark-full'; mark = '×';
     } else if (promoCode && !isAdvance(promoCode)) {
-      // コードあり：受付終了以外は、上限・上限0を超えて受付できる（最大件数は超えられない）
+      // コードあり：受付終了以外は、上限・最大件数・上限0を超えて受付できる
       cls = 'open'; markCls = 'mark-open'; mark = '○'; canSelect = true;
       sub = '<div style="font-size:11px;color:var(--teal)">コード適用</div>';
     } else if ((generalClosed[today] || []).includes(time) && promoCode !== ADVANCE_CODE_BIRD) {
