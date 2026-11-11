@@ -369,25 +369,19 @@
 const GAS_URL        = 'https://script.google.com/macros/s/AKfycbw-JsEZlCOe6FeItSrj18jK2hOx84rRzSBqpLId6eyDH5--pgEkxJiPWsx09ln82wMf/exec';
 const LIFF_ID        = '2010369051-b9OGqRDi';
 const MAX_PER_SLOT   = 5;
-const SLOT_MIN       = 60; // 1時間刻み
+const SLOT_MIN       = 30; // 30分刻み
 const OPEN_AT        = '5:30';   // 受付開始（この時刻から予約できる）
 const CLOSE_AT       = '22:00';  // 受付終了（この時刻以降は受付時間外）
 const toMin = s => { const m = String(s).split(':'); return Number(m[0]) * 60 + Number(m[1] || 0); };
 const MAX_TOTAL_DEFAULT = 8; // 1枠で受け付ける最大件数（プロモ・一般・待ちの合計）
 // 受付枠（サーバーの値を優先。取得できない場合のデフォルト）
-// 8:30〜23:00を30分・60分の枠に分けている。8:30はコード専用。
-const DEFAULT_SLOT_DEFS = [
-  { time: '08:30', end: '09:00', promoOnly: true },
-  { time: '09:00', end: '09:30' }, { time: '09:30', end: '10:00' },
-  { time: '10:00' },
-  { time: '11:00', end: '11:30' }, { time: '11:30', end: '12:30' },
-  { time: '12:30', end: '13:30' },
-  { time: '13:30', end: '14:00' },
-  { time: '14:00' }, { time: '15:00' }, { time: '16:00' }, { time: '17:00' },
-  { time: '18:00' }, { time: '19:00' }, { time: '20:00' },
-  { time: '21:00', end: '21:30' }, { time: '21:30', end: '22:00' },
-  { time: '22:00' },
-];
+// 8:30〜23:00を30分ごとの枠に分けている。8:30はコード専用。
+const DEFAULT_SLOT_DEFS = (() => {
+  const fmt = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+  const out = [{ time: '08:30', end: '09:00', promoOnly: true }];
+  for (let m = 9 * 60; m < 23 * 60; m += 30) out.push({ time: fmt(m), end: fmt(m + 30) });
+  return out;
+})();
 const WARN_THRESHOLD = 2;  // 残り△表示の閾値
 // 有効なプロモーションコード（入力すると上限を超えて受付できる。休みの枠は不可）
 const RECURRING_CODE = '定期'; // 毎週の受付用コード（選んだ曜日・時間で毎週受付）
