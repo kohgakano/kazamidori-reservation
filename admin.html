@@ -324,7 +324,7 @@
 const GAS_URL     = 'https://script.google.com/macros/s/AKfycbw-JsEZlCOe6FeItSrj18jK2hOx84rRzSBqpLId6eyDH5--pgEkxJiPWsx09ln82wMf/exec';
 const LIFF_ID_ADMIN = '2010369051-2a4AtkBu'; // 管理者用LIFFのID（別途作成）
 const ADMIN_IDS   = ['U715fc71e2b7b3501161496aa934c0419','Ufaa1a7d88eb066170c59db13ccaeff2c',]; // Admin.gsと同じIDを入れる
-const SLOT_MIN      = 60;
+const SLOT_MIN      = 30;
 const DAY_START     = 9;
 const DAY_END       = 24;
 let   CLOSED_DAYS   = [];
@@ -1213,8 +1213,8 @@ function closeSettings(e)      { if (e.target === document.getElementById('setti
 function closeSettingsDirect() { document.getElementById('settingsOverlay').classList.remove('open'); }
 
 // 枠の一覧：サーバーが返した並び（8:30・13:30などを含む）を使う。なければデフォルト
-const DEFAULT_TIMES = ['08:30','09:00','09:30','10:00','11:00','11:30','12:30','13:30','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','21:30','22:00'];
-const HALF_END = { '08:30':'09:00', '09:00':'09:30', '09:30':'10:00', '11:00':'11:30', '11:30':'12:30', '12:30':'13:30', '13:30':'14:00', '21:00':'21:30', '21:30':'22:00' }; // 60分以外の枠の終了時刻
+const DEFAULT_TIMES = (() => { const out = ['08:30']; for (let m = 9 * 60; m < 23 * 60; m += 30) out.push(String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0')); return out; })();
+const HALF_END = {};   // すべて30分枠なので、個別指定なし（+30分）
 function generateTimes() {
   const first = Object.values(allSlots)[0];
   const keys  = first ? Object.keys(first) : [];
