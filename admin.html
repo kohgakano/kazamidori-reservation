@@ -306,6 +306,26 @@
   </div>
 </div>
 
+<!-- 枠の設定（人数・コード） -->
+<div class="modal-overlay" id="slotEditOverlay" onclick="if(event.target===this)closeSlotEdit()">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="slotEditTitle">⚙️ 枠の設定</span>
+      <button class="modal-close" onclick="closeSlotEdit()">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--sub);margin-bottom:12px;line-height:1.6">施術の「人数（上限）」と「受付コード」を変更します。<b>毎週この曜日・この時間の設定</b>です（その日だけの変更ではありません）。</div>
+    <div class="field-label" style="font-size:12px;font-weight:700;margin-bottom:4px">曜日</div>
+    <select id="slotEditDay" onchange="fillSlotEdit()" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:15px;margin-bottom:12px"></select>
+    <div style="font-size:12px;font-weight:700;margin-bottom:4px">人数（上限）</div>
+    <input type="number" id="slotEditLimit" min="0" max="10" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:15px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:4px">受付コード</div>
+    <select id="slotEditCode" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:15px;margin-bottom:16px">
+      <option value="0">通常受付</option><option value="1">満枠（即＋待ち可）</option><option value="2">一般閉（即のみ可）</option><option value="3">全閉（すべて停止）</option>
+    </select>
+    <button id="slotEditSave" onclick="saveSlotEdit()" style="width:100%;background:var(--teal);color:#fff;border:none;border-radius:8px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">保存する</button>
+  </div>
+</div>
+
 <!-- 詳細モーダル -->
 <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
   <div class="modal">
@@ -336,7 +356,7 @@ function isOx(m) { return String(m || '').split('+')[0] === 'oxygen'; }
 function isTr(m) { return String(m || '').split('+')[0] === 'training'; }
 function addMin(time, n) { const [h,m] = time.split(':').map(Number); const t = h*60+m+n; return `${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`; }
 // 受付の終了時刻（酸素ルーム・トレーニングは1時間）
-function endFor(menuId, time) { return (isOx(menuId) || isTr(menuId)) ? addMin(time, 60) : calcEndTime(time); }
+function endFor(menuId, time) { return isOx(menuId) ? addMin(time, 60) : calcEndTime(time); }   // 酸素ルームだけ1時間（治療・トレーニングは30分枠）
 // カレンダーの目印（酸素ルームは開始時刻も表示。酸素のあとの施術は 🫧→）
 function menuMark(r) { return r.viaOxygen ? '🫧→' : (isOx(r.menuId) ? '🫧' + r.time + ' ' : (isTr(r.menuId) ? '💪' : '')); }
 const COND_LABELS = {
@@ -472,7 +492,7 @@ function renderWeek(dates) {
   html += '</tr></thead><tbody>';
   times.forEach(time => {
     const oxStarts = OXYGEN_TIMES.filter(t => t >= time && t < calcEndTime(time));   // この治療枠の中に始まる酸素ルーム
-    html += `<tr><td class="time-cell">${time}</td>`;
+    html += `<tr><td class="time-cell" style="cursor:pointer" title="タップして上限・コードを変更" onclick="openSlotEdit('${formatDate(dates[0])}','${time}')">${time}</td>`;
     dates.forEach(d => {
       const ds        = formatDate(d);
       const isClosed  = CLOSED_DAYS.includes(d.getDay());
@@ -583,7 +603,7 @@ function renderDay(date) {
             ? `<div class="tl-add" onclick="openAdminBooking('${ds}','${time}','oxygen')">＋ ${oxStarts.join('・')} 開始</div>`
             : (cols.ox.length ? '' : '<div class="tl-oxhint">－</div>'));
       html += `<div class="timeline-row">
-        <div class="tl-time">${time}</div>
+        <div class="tl-time" style="cursor:pointer;flex-direction:column;gap:2px" title="タップして上限・コードを変更" onclick="openSlotEdit('${ds}','${time}')">${time}<span style="font-size:9px;opacity:.7">⚙️</span></div>
         <div class="tl-cols">
           <div class="tl-col">
             ${isGC(ds, time) ? '<div style="color:#e67e22;font-size:11px;font-weight:700">🟠 一般閉（即のみ受付）</div>' : ''}
@@ -1142,6 +1162,52 @@ async function saveSettingsFromUI() {
     showToast('⚠️ 保存に失敗しました');
   }
   btn.textContent = '保存する'; btn.disabled = false;
+}
+
+// ============================================================
+// カレンダーの時間をタップして、その曜日×時間の人数（上限）とコードを変更
+// ============================================================
+let slotEditTime = null;
+async function openSlotEdit(ds, time) {
+  slotEditTime = time;
+  if (Object.keys(slotLimits).length === 0) await loadLimitSettings();
+  if (Object.keys(slotLimits).length === 0) return;   // 読み込み失敗（トースト表示済み）
+  const wd = new Date(ds + 'T00:00:00').getDay();
+  document.getElementById('slotEditDay').innerHTML = DAY_NAMES.map((n, i) => `<option value="${i}" ${i === wd ? 'selected' : ''}>${n}曜日</option>`).join('');
+  document.getElementById('slotEditTitle').textContent = `⚙️ ${time}〜${calcEndTime(time)} の設定`;
+  fillSlotEdit();
+  document.getElementById('slotEditOverlay').classList.add('open');
+}
+function fillSlotEdit() {
+  const day = document.getElementById('slotEditDay').value;
+  document.getElementById('slotEditLimit').value = slotLimits[slotEditTime]?.[day] ?? 0;
+  document.getElementById('slotEditCode').value  = String(Number(slotCodes[slotEditTime]?.[day] ?? 0));
+}
+function closeSlotEdit() { document.getElementById('slotEditOverlay').classList.remove('open'); }
+async function saveSlotEdit() {
+  const day   = document.getElementById('slotEditDay').value;
+  const limit = Number(document.getElementById('slotEditLimit').value);
+  const code  = Number(document.getElementById('slotEditCode').value);
+  if (!(limit >= 0 && limit <= 10)) { showToast('人数は0〜10で入れてください'); return; }
+  const times = Object.keys(slotLimits).sort();
+  const newLimits = {}, newCodes = {};
+  times.forEach(t => { newLimits[t] = Number(slotLimits[t]?.[day] ?? 0); newCodes[t] = Number(slotCodes[t]?.[day] ?? 0); });
+  newLimits[slotEditTime] = limit; newCodes[slotEditTime] = code;
+  const btn = document.getElementById('slotEditSave'); btn.disabled = true; btn.textContent = '保存中…';
+  try {
+    const params = new URLSearchParams({ action: 'saveSlotLimits', userId, day, limits: JSON.stringify(newLimits), codes: JSON.stringify(newCodes) });
+    const res  = await fetch(`${GAS_URL}?${params.toString()}`);
+    const data = await res.json();
+    if (data.success) {
+      if (!slotLimits[slotEditTime]) slotLimits[slotEditTime] = {};
+      if (!slotCodes[slotEditTime])  slotCodes[slotEditTime]  = {};
+      slotLimits[slotEditTime][day] = limit; slotCodes[slotEditTime][day] = code;
+      showToast(`✅ ${DAY_NAMES[day]}曜 ${slotEditTime} を保存しました`);
+      closeSlotEdit();
+      await loadAndRender();
+    } else showToast('⚠️ ' + (data.message || '保存に失敗しました'));
+  } catch(e) { showToast('⚠️ 通信エラーが発生しました'); }
+  btn.disabled = false; btn.textContent = '保存する';
 }
 
 async function loadLimitSettings() {
