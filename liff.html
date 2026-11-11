@@ -389,6 +389,7 @@ const ADVANCE_CODE   = '風';   // 事前受付用コード：今日から7日�
 const ADVANCE_DAYS   = 7;
 const ADVANCE_CODE_BIRD = '鳥'; // 風と同じ事前受付。ただし一般閉の枠でも受付できる
 const isAdvance = c => c === ADVANCE_CODE || c === ADVANCE_CODE_BIRD;
+const ACCIDENT_CODE  = '事故';  // 「事故のみ」の枠を受付できるコード
 const OXYGEN_CODE    = '固定';  // 酸素ルーム用コード：毎週の固定受付（曜日と開始時間を選ぶ）
 const PROMO_CODES    = ['事故', '即', RECURRING_CODE, ADVANCE_CODE, ADVANCE_CODE_BIRD, OXYGEN_CODE];
 let OXYGEN_TIMES = ['09:00','10:15','11:30','14:00','15:15','16:30','17:45','19:15','20:30','21:45']; // 酸素ルームの開始時間（1時間）。サーバーの値で上書き
@@ -415,6 +416,7 @@ let promoValid   = false;
 let CLOSED_DAYS  = [];
 let HOLIDAY_DATES = [];
 let fullSlots    = {};  // 満枠（コード1・手動）に設定された時間
+let accidentOnly  = {};   // 事故のみ（事故のコードの人だけ受付）に設定された時間 { 日付: [時間] }
 let generalClosed = {};  // 一般閉（コード2）に設定された時間 { 'yyyy-MM-dd': ['10:00', ...] }
 let closedSlots  = {};   // 受付終了に設定された時間 { 'yyyy-MM-dd': ['10:00', ...] }
 let waitingData  = {};   // 待ち受付の件数 { 'yyyy-MM-dd': { '10:00': 1, ... } }
@@ -528,6 +530,7 @@ async function fetchSlots() {
     limitsData    = data.limits || {};
     waitingData   = data.waiting || {};
     generalClosed = data.generalClosed || {};
+    accidentOnly  = data.accidentOnly || {};
     fullSlots     = data.fullSlots || {};
     trainingData  = data.training || {};
     oxygenSlotsData = data.oxygenSlots || {};
@@ -692,6 +695,9 @@ function renderTodaySlots(today) {
       cls = 'closed-slot'; markCls = 'mark-closed'; mark = '受付終了';
     } else if (def.promoOnly && (!promoCode || promoCode === ADVANCE_CODE)) {   // 鳥はコード専用枠も受付できる（風は不可）
       cls = 'closed-slot'; markCls = 'mark-closed'; mark = 'コード<br>専用';
+    } else if ((accidentOnly[today] || []).includes(time) && promoCode !== ACCIDENT_CODE) {
+      // 事故のみの枠：事故のコード以外（即・一般・待ち・風・鳥）は受付不可
+      cls = 'closed-slot'; markCls = 'mark-closed'; mark = promoCode ? '事故<br>のみ' : '受付終了';   // コードなしの方には、コードの存在を見せず「受付終了」と表示
     } else if (promoCode && !isAdvance(promoCode)) {
       // コードあり：受付終了以外は、上限・最大件数・上限0を超えて受付できる
       cls = 'open'; markCls = 'mark-open'; mark = '○'; canSelect = true;
