@@ -320,7 +320,7 @@
     <input type="number" id="slotEditLimit" min="0" max="10" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:15px;margin-bottom:12px">
     <div style="font-size:12px;font-weight:700;margin-bottom:4px">受付コード</div>
     <select id="slotEditCode" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:15px;margin-bottom:16px">
-      <option value="0">通常受付</option><option value="1">満枠（即＋待ち可）</option><option value="2">一般閉（即のみ可）</option><option value="3">全閉（すべて停止）</option>
+      <option value="0">通常受付</option><option value="1">満枠（即＋待ち可）</option><option value="2">一般閉（即のみ可）</option><option value="4">事故のみ（事故コードだけ可）</option><option value="3">全閉（すべて停止）</option>
     </select>
     <button id="slotEditSave" onclick="saveSlotEdit()" style="width:100%;background:var(--teal);color:#fff;border:none;border-radius:8px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">保存する</button>
   </div>
@@ -381,6 +381,7 @@ let viewMode           = 'day';   // 初期表示は「日」
 let offset             = 0;
 let allSlots           = {};
 let allGeneralClosed   = {};   // 一般閉（コード2）の時間 { 日付: [時間] }
+let allAccidentOnly    = {};   // 事故のみ（コード4）の時間 { 日付: [時間] }
 let adminFormData      = { name: '', menuId: '', conditionId: '', oxTime: '' };
 let adminSelectedDate  = null;
 let adminSelectedTime  = null;
@@ -474,6 +475,7 @@ async function loadAndRender() {
     const data = await res.json();
     allSlots = data.slots || {};
     allGeneralClosed = data.generalClosed || {};
+    allAccidentOnly  = data.accidentOnly || {};
   } catch(e) {
     allSlots = generateDummySlots(dates);
   }
@@ -554,7 +556,7 @@ function renderWeek(dates) {
           html += `<td class="blocked-cell">${label ? '<div class="blocked-label" style="color:#e74c3c;font-size:9px">受付<br>終了</div>' : ''}</td>`;
         } else if (list.length === 0) {
           if (!canAdd) { html += `<td class="oxno ${tdCls}"></td>`; return; }
-          const gcMark = (label && isGC(ds, time)) ? '<div style="color:#e67e22;font-size:9px;font-weight:700;text-align:center;line-height:1.1">一般閉</div>' : '';
+          const gcMark = (label && isGC(ds, time)) ? '<div style="color:#e67e22;font-size:9px;font-weight:700;text-align:center;line-height:1.1">一般閉</div>' : ((label && isAO(ds, time)) ? '<div style="color:#c0392b;font-size:9px;font-weight:700;text-align:center;line-height:1.1">事故のみ</div>' : '');
           html += `<td class="empty-cell empty-clickable ${tdCls}" onclick="${addOnclick}">${gcMark}</td>`;
         } else {
           const first = list[0];
@@ -637,7 +639,7 @@ function renderDay(date) {
         <div class="tl-time" style="cursor:pointer;flex-direction:column;gap:2px" title="タップして上限・コードを変更" onclick="openSlotEdit('${ds}','${time}')">${time}<span style="font-size:9px;opacity:.7">⚙️</span></div>
         <div class="tl-cols">
           <div class="tl-col">
-            ${isGC(ds, time) ? '<div style="color:#e67e22;font-size:11px;font-weight:700">🟠 一般閉（即のみ受付）</div>' : ''}
+            ${isGC(ds, time) ? '<div style="color:#e67e22;font-size:11px;font-weight:700">🟠 一般閉（即のみ受付）</div>' : ''}${isAO(ds, time) ? '<div style="color:#c0392b;font-size:11px;font-weight:700">🔴 事故のみ（事故コードだけ受付）</div>' : ''}
             ${txCol}
           </div>
           <div class="tl-col">${trCol}</div>
@@ -1267,7 +1269,7 @@ function renderLimitInputs() {
       <input type="number" min="0" max="10" value="${slotLimits[time]?.[day] ?? 0}"
         id="limit_${time.replace(':','_')}" class="limit-input">
       <select id="code_${time.replace(':','_')}" class="limit-input" style="width:auto;flex:1 1 0;min-width:0;max-width:100%;font-size:12px;padding:6px 2px">
-        ${[[0,'通常受付'],[1,'満枠（即＋待ち可）'],[2,'一般閉（即のみ可）'],[3,'全閉（すべて停止）']].map(([v,l]) => `<option value="${v}" ${Number(slotCodes[time]?.[day] ?? 0) === v ? 'selected' : ''}>${l}</option>`).join('')}
+        ${[[0,'通常受付'],[1,'満枠（即＋待ち可）'],[2,'一般閉（即のみ可）'],[4,'事故のみ（事故コードだけ可）'],[3,'全閉（すべて停止）']].map(([v,l]) => `<option value="${v}" ${Number(slotCodes[time]?.[day] ?? 0) === v ? 'selected' : ''}>${l}</option>`).join('')}
       </select>
     </div>`).join('');
 }
@@ -1330,7 +1332,8 @@ function formatDateJapanese(d) {
   return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）`;
 }
 // 実際の受付（目印の休業日・受付終了などを除く）
-function isGC(ds, time) { return (allGeneralClosed[ds] || []).includes(time); }
+function isAO(ds, time) { return (allAccidentOnly[ds] || []).includes(time); }
+function isGC(ds, time) { return (allGeneralClosed[ds] || []).includes(time) && !isAO(ds, time); }   // 一般閉（事故のみは別表示）
 function isRealRes(r) { return r.status === 'confirmed' || r.status === 'waiting'; }
 // その枠が「休み」の理由（休みでなければ空文字）
 function offReason(ds, time) {
