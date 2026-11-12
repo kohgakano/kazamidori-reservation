@@ -385,8 +385,8 @@ const DEFAULT_SLOT_DEFS = (() => {
 const WARN_THRESHOLD = 1;  // 残り△表示の閾値（残りがこの数以下なら△。上限2の運用に合わせて1）
 // 有効なプロモーションコード（入力すると上限を超えて受付できる。休みの枠は不可）
 const RECURRING_CODE = '定期'; // 毎週の受付用コード（選んだ曜日・時間で毎週受付）
-const ADVANCE_CODE   = '風';   // 事前受付用コード：今日から7日先まで受付できる（枠は一般扱い・1週間に3件まで）
-const ADVANCE_DAYS   = 7;
+const ADVANCE_CODE   = '風';   // 事前受付用コード：今日から9日先まで受付できる（枠は一般扱い・3件まで）
+const ADVANCE_DAYS   = 9;
 const ADVANCE_CODE_BIRD = '鳥'; // 風と同じ事前受付。ただし一般閉の枠でも受付できる
 const isAdvance = c => c === ADVANCE_CODE || c === ADVANCE_CODE_BIRD;
 const ACCIDENT_CODE  = '事故';  // 「事故のみ」の枠を受付できるコード
@@ -476,7 +476,7 @@ function goSlots() {
   viewDate = formatDate(new Date());
   document.getElementById('legend').style.display = 'flex';
   window.scrollTo(0, 0);
-  if (isAdvance(promoCode)) { loadTodaySlots(); return; } // 7日先までの空き状況を読み込む
+  if (isAdvance(promoCode)) { loadTodaySlots(); return; } // 9日先までの空き状況を読み込む
   renderTodaySlots(viewDate);
 }
 
@@ -583,12 +583,12 @@ function renderTodaySlots(today) {
   html += `<div class="user-bar">
     <div>
       <div class="ub-main">👤 ${escapeHtml(userName)} 様</div>
-      ${selectedMenu === 'oxygen' ? '<div class="ub-promo">' + (promoCode === OXYGEN_CODE ? '🫧 酸素ルーム（毎週の固定受付・1時間）' : '🫧 酸素ルーム（当日の1件・1時間）') + '</div>' : selectedMenu === 'training' ? '<div class="ub-promo">💪 トレーニング（30分・同時2名まで）</div>' : isAdvance(promoCode) ? '<div class="ub-promo">🗓️ 事前受付（7日先まで・1週間に3件まで／あと' + Math.max(0, ADVANCE_MAX - advanceUsed) + '件）</div>' : promoCode === RECURRING_CODE ? '<div class="ub-promo">🔁 毎週受付（曜日と時間を選んでください）</div>' : (promoCode ? '<div class="ub-promo">🎟️ コード適用中（上限を超えて受付できます）</div>' : '')}
+      ${selectedMenu === 'oxygen' ? '<div class="ub-promo">' + (promoCode === OXYGEN_CODE ? '🫧 酸素ルーム（毎週の固定受付・1時間）' : '🫧 酸素ルーム（当日の1件・1時間）') + '</div>' : selectedMenu === 'training' ? '<div class="ub-promo">💪 トレーニング（30分・同時2名まで）</div>' : isAdvance(promoCode) ? '<div class="ub-promo">🗓️ 事前受付（9日先まで・3件まで／あと' + Math.max(0, ADVANCE_MAX - advanceUsed) + '件）</div>' : promoCode === RECURRING_CODE ? '<div class="ub-promo">🔁 毎週受付（曜日と時間を選んでください）</div>' : (promoCode ? '<div class="ub-promo">🎟️ コード適用中（上限を超えて受付できます）</div>' : '')}
     </div>
     <button onclick="backToInfo()">‹ 入力に戻る</button>
   </div>`;
 
-  // 事前受付（コード「風」）：日付を選ぶ（今日〜7日先）
+  // 事前受付（コード「風」）：日付を選ぶ（今日〜9日先）
   if (isAdvance(promoCode)) {
     html += '<div class="date-tabs">' + advanceDates().map(d => {
       const dd = new Date(d + 'T00:00:00');
@@ -820,7 +820,7 @@ function generateTimeSlots() {
 // ============================================================
 let selectedIsWait = false;
 let myBookings = []; // 自分の今日以降の受付 [{date,time,name}]
-let advanceUsed = 0; // 事前受付：今日〜7日先の自分の受付件数
+let advanceUsed = 0; // 事前受付：今日〜9日先の自分の受付件数
 const ADVANCE_MAX = 3;
 let viewDate = null; // 表示中の日付（事前受付コードのとき日付を切り替える）
 let recurWeekday = null; // 毎週受付：選んだ曜日（0=日〜6=土）
@@ -829,7 +829,7 @@ function selectSlot(date, time, el, isWait) {
   // 同じ名前の人は同じ日に1件まで
   const sameDay = myBookings.find(b => b.date === date && b.name === userName);
   if (sameDay) { showToast(sameDay.time === time ? 'この時間はすでに受付済みです' : `この日は${sameDay.time}で受付済みです（同じ日は1件まで）`); return; }
-  if (isAdvance(promoCode) && advanceUsed >= ADVANCE_MAX) { showToast(`1週間に受付できるのは${ADVANCE_MAX}件までです`); return; }
+  if (isAdvance(promoCode) && advanceUsed >= ADVANCE_MAX) { showToast(`${ADVANCE_DAYS}日先までの事前受付は${ADVANCE_MAX}件までです`); return; }
   selectedIsWait = !!isWait;
   // 以前の選択を解除
   if (selectedItem && selectedItem !== el) selectedItem.classList.remove('selected');
@@ -887,10 +887,10 @@ function onPromoInput() {
     hint.innerHTML = '<span class="promo-ok">✅ 毎週用のコードです（次の画面で曜日と時間を選びます。月末に継続確認が届きます）</span>';
     promoValid = true;
   } else if (val === ADVANCE_CODE_BIRD) {
-    hint.innerHTML = '<span class="promo-ok">✅ 事前受付のコードです（今日から7日先まで。一般閉の枠でも受付できます。1週間に3件まで）</span>';
+    hint.innerHTML = '<span class="promo-ok">✅ 事前受付のコードです（今日から9日先まで。一般閉の枠でも受付できます。3件まで）</span>';
     promoValid = true;
   } else if (val === ADVANCE_CODE) {
-    hint.innerHTML = '<span class="promo-ok">✅ 事前受付のコードです（今日から7日先まで受付できます。1週間に3件まで）</span>';
+    hint.innerHTML = '<span class="promo-ok">✅ 事前受付のコードです（今日から9日先まで受付できます。3件まで）</span>';
     promoValid = true;
   } else if (PROMO_CODES.includes(val)) {
     hint.innerHTML = '<span class="promo-ok">✅ 有効なコードです（上限を超えて受付できます。受付終了・休業日は不可）</span>';
