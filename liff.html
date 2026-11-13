@@ -422,6 +422,7 @@ let closedSlots  = {};   // 受付終了に設定された時間 { 'yyyy-MM-dd':
 let waitingData  = {};   // 待ち受付の件数 { 'yyyy-MM-dd': { '10:00': 1, ... } }
 let slotDefs     = DEFAULT_SLOT_DEFS;
 let maxTotal     = MAX_TOTAL_DEFAULT;
+let fetchFailed  = false;
 let limitsData   = {};   // 枠ごとの上限（上限設定シート） { 'yyyy-MM-dd': { '10:00': 5, ... } }
 let selectedMenu  = '';   // 選択中の施術内容
 let userName     = '';   // ステップ1で入力した名前
@@ -523,6 +524,8 @@ async function fetchSlots() {
   try {
     const res  = await fetch(`${GAS_URL}?action=getSlots&dates=${dates}&userId=${userId}`);
     const data = await res.json();
+    if (!data || data.error || !data.slots || !data.limits) throw new Error((data && data.error) || 'no slots');
+    fetchFailed = false;
     slotsData     = data.slots || {};
     closedSlots   = data.closed || {};
     CLOSED_DAYS   = Array.isArray(data.closedDays) ? data.closedDays.map(Number) : [];
@@ -547,7 +550,9 @@ async function fetchSlots() {
     advanceUsed = Number(data.advanceUsed || 0);
     myBookings  = Array.isArray(data.mine) ? data.mine : [];
   } catch(e) {
-    slotsData = {};
+    console.error('fetchSlots failed', e);
+    fetchFailed = true;
+    slotsData = {}; limitsData = {};
   }
 }
 
@@ -560,6 +565,11 @@ async function loadTodaySlots() {
 }
 
 function renderTodaySlots(today) {
+  if (fetchFailed) {
+    document.getElementById('mainContent').innerHTML =
+      '<div style="padding:40px 20px;text-align:center;color:#555;line-height:1.8">空き状況を取得できませんでした。<br>通信状況をご確認のうえ、再読み込みしてください。<br><button onclick="loadTodaySlots()" style="margin-top:16px;padding:12px 28px;border:none;border-radius:8px;background:#06c755;color:#fff;font-size:16px">再読み込み</button></div>';
+    return;
+  }
   const now    = new Date();
   const todayDate = new Date(today + 'T00:00:00');
   const month  = todayDate.getMonth() + 1;
