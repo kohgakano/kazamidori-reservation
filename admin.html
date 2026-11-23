@@ -77,6 +77,14 @@
   .tl-blocked { background: #1a1a1a; }
   .tl-blocked .tl-time { background: #111111; color: #555555; border-color: #333333; }
   .tl-blocked .tl-content { color: #555555; font-size: 11px; }
+  /* 日報サイト：狭い画面は全画面、広い画面（PC）は右半分に並べる */
+  #embedOverlay { display:none; position:fixed; inset:0; z-index:300; background:#fff; flex-direction:column; }
+  #embedOverlay.open { display:flex; }
+  @media (min-width: 900px) {
+    #embedOverlay { left:50%; z-index:90; border-left:3px solid var(--teal); box-shadow:-2px 0 8px rgba(0,0,0,.12); }
+    body.embed-open { padding-right:50vw; }
+    body.embed-open .modal-overlay { padding-right:0; }
+  }
   .canc-cell { background:#d5d8dc; color:#7f8c8d; font-size:10px; line-height:1.15; text-align:center; padding:2px 1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:56px; margin:0 auto; border-radius:3px }
   .booking-card.canc { background:#d5d8dc; color:#7f8c8d; cursor:default; }
   .booking-card { background: var(--booked); color: #fff; border-radius: 4px; padding: 5px 9px; cursor: pointer; transition: filter .15s; display: flex; flex-direction: column; gap: 1px; }
@@ -287,7 +295,7 @@
 </div>
 
 <!-- 別サイト（日報）を、この画面の中に表示 -->
-<div id="embedOverlay" style="display:none;position:fixed;inset:0;z-index:300;background:#fff;flex-direction:column">
+<div id="embedOverlay">
   <div style="background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:8px 14px;gap:8px">
     <button class="nav-btn" onclick="closeEmbed()" style="background:rgba(255,255,255,.2)">‹ 戻る</button>
     <span style="font-weight:700;font-size:14px">📝 日報</span>
@@ -504,7 +512,7 @@ function scrollToNow() {
 function isBusyForAutoRefresh() {
   if (document.hidden) return true;
   if (document.querySelector('.modal-overlay.open')) return true;
-  if (document.getElementById('embedOverlay').style.display === 'flex') return true;
+  if (isEmbedOpen() && window.innerWidth < 900) return true;   // 全画面のときだけ止める（横並びのときは更新を続ける）
   const a = document.activeElement;
   if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return true;
   return !isAdmin;
@@ -907,13 +915,19 @@ async function submitAdminBooking() {
 // ============================================================
 // 別サイト（日報）を、この画面の中に表示する
 const EMBED_URL = 'https://daily-report-4wl3au2jha-an.a.run.app/admin.html';
+function isEmbedOpen() { return document.getElementById('embedOverlay').classList.contains('open'); }
 function openEmbed() {
+  if (isEmbedOpen()) { closeEmbed(); return; }   // もう一度押すと閉じる
   const f = document.getElementById('embedFrame');
   if (!f.getAttribute('src')) f.setAttribute('src', EMBED_URL);   // 初めて開いたときだけ読み込む（2回目からは続きから）
   document.getElementById('embedOpenLink').href = EMBED_URL;
-  document.getElementById('embedOverlay').style.display = 'flex';
+  document.getElementById('embedOverlay').classList.add('open');
+  document.body.classList.add('embed-open');
 }
-function closeEmbed() { document.getElementById('embedOverlay').style.display = 'none'; }
+function closeEmbed() {
+  document.getElementById('embedOverlay').classList.remove('open');
+  document.body.classList.remove('embed-open');
+}
 
 // 日報コピー（LINEで「今日の予約」と送ったときと同じ文章をコピー）
 async function copyDailyReport() {
