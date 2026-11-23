@@ -77,6 +77,9 @@
   .tl-blocked { background: #1a1a1a; }
   .tl-blocked .tl-time { background: #111111; color: #555555; border-color: #333333; }
   .tl-blocked .tl-content { color: #555555; font-size: 11px; }
+  .canc-cell { background:#d5d8dc; color:#7f8c8d; font-size:10px; line-height:1.15; text-align:center; padding:2px 1px; text-decoration:line-through; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:56px; margin:0 auto; border-radius:3px }
+  .booking-card.canc { background:#d5d8dc; color:#7f8c8d; cursor:default; }
+  .booking-card.canc .card-name { text-decoration:line-through }
   .booking-card { background: var(--booked); color: #fff; border-radius: 4px; padding: 5px 9px; cursor: pointer; transition: filter .15s; display: flex; flex-direction: column; gap: 1px; }
   .booking-card:hover { filter: brightness(1.15); }
   .booking-card .card-name { font-size: 13px; font-weight: 700; }
@@ -151,6 +154,7 @@
     <h1>⚙️ 管理カレンダー</h1>
     <div style="display:flex;align-items:center;gap:6px">
       <button class="nav-btn" onclick="openSymptomList()" style="background:rgba(255,255,255,.2)">🏥 症状</button>
+      <button class="nav-btn" onclick="copyDailyReport()" style="background:rgba(255,255,255,.2)">📋 日報</button>
       <button class="nav-btn" onclick="openSettings()">⚙️ 設定</button>
       <div class="view-tabs">
         <button class="view-tab" id="tabWeek" onclick="switchView('week')">週</button>
@@ -448,24 +452,66 @@ async function init() {
     }
   } catch(e) {}
 
-  await loadAndRender();
+  await loadAndRender('now');
 }
 
 function switchView(mode) {
   viewMode = mode; offset = 0;
   document.getElementById('tabWeek').className = 'view-tab' + (mode==='week'?' active':'');
   document.getElementById('tabDay').className  = 'view-tab' + (mode==='day' ?' active':'');
-  loadAndRender();
+  loadAndRender('now');
 }
 
 async function navigate(dir) {
   offset += dir;
   document.getElementById('btnPrev').disabled = (viewMode==='week' && offset<=0);
-  await loadAndRender();
+  await loadAndRender('now');
 }
 
-async function loadAndRender() {
-  document.getElementById('mainContent').innerHTML =
+// ===== 自動更新（10分おき）と「今の時間」へのスクロール =====
+const AUTO_REFRESH_MS = 10 * 60 * 1000;
+let lastRefreshAt = Date.now();
+let lastAutoY = null;          // 自動でスクロールした位置（手動でスクロールしたかの判定用）
+function nowSlotTime(times) {
+  const n = new Date(), m = n.getHours() * 60 + n.getMinutes();
+  let pick = times[0];
+  times.forEach(t => { const [h, mi] = String(t).split(':').map(Number); if (h * 60 + mi <= m) pick = t; });
+  return pick;
+}
+function scrollToNow() {
+  if (offset !== 0) return;                       // 今日を含む画面だけ
+  const times = generateTimes();
+  const row = document.querySelector('[data-time="' + nowSlotTime(times) + '"]');
+  if (!row) return;
+  const head = document.querySelector('header');
+  const hh = head ? head.offsetHeight : 0;
+  const rowH = row.getBoundingClientRect().height || 40;
+  const y = Math.max(0, row.getBoundingClientRect().top + window.scrollY - hh - rowH * 1.5);   // 1〜2行前から見えるように
+  window.scrollTo(0, y);
+  lastAutoY = window.scrollY;
+}
+function isBusyForAutoRefresh() {
+  if (document.hidden) return true;
+  if (document.querySelector('.modal-overlay.open')) return true;
+  const a = document.activeElement;
+  if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return true;
+  return !isAdmin;
+}
+async function autoRefresh() {
+  if (isBusyForAutoRefresh()) return;
+  const manual = lastAutoY !== null && Math.abs(window.scrollY - lastAutoY) > 40;   // 手で動かしていたら、位置は動かさない
+  const y = window.scrollY;
+  await loadAndRender(manual ? 'keep' : 'now', true);
+  if (manual) window.scrollTo(0, y);
+}
+setInterval(autoRefresh, AUTO_REFRESH_MS);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && Date.now() - lastRefreshAt > AUTO_REFRESH_MS) autoRefresh();   // 開き直したとき、古ければ更新
+});
+
+async function loadAndRender(scrollMode, silent) {
+  const keepY = window.scrollY;
+  if (!silent) document.getElementById('mainContent').innerHTML =
     '<div class="loading"><div class="spinner"></div> 読み込み中…</div>';
   const dates = viewMode === 'week' ? getWeekDates(offset) : [getDayDate(offset)];
   updateNavLabel(dates);
@@ -477,9 +523,12 @@ async function loadAndRender() {
     allGeneralClosed = data.generalClosed || {};
     allAccidentOnly  = data.accidentOnly || {};
   } catch(e) {
+    if (silent) return;                // 自動更新の失敗では、今の表示をそのまま残す
     allSlots = generateDummySlots(dates);
   }
+  lastRefreshAt = Date.now();
   viewMode === 'week' ? renderWeek(dates) : renderDay(dates[0]);
+  if (scrollMode === 'now') scrollToNow(); else window.scrollTo(0, keepY);   // 'now'：今の時間へ／それ以外：元の位置に戻す
 }
 
 function getWeekDates(off) {
@@ -525,7 +574,7 @@ function renderWeek(dates) {
   html += '</tr></thead><tbody>';
   times.forEach(time => {
     const oxStarts = OXYGEN_TIMES.filter(t => t >= time && t < calcEndTime(time));   // この治療枠の中に始まる酸素ルーム
-    html += `<tr><td class="time-cell" style="cursor:pointer" title="タップして上限・コードを変更" onclick="openSlotEdit('${formatDate(dates[0])}','${time}')">${time}</td>`;
+    html += `<tr data-time="${time}"><td class="time-cell" style="cursor:pointer" title="タップして上限・コードを変更" onclick="openSlotEdit('${formatDate(dates[0])}','${time}')">${time}</td>`;
     dates.forEach(d => {
       const ds        = formatDate(d);
       const isClosed  = CLOSED_DAYS.includes(d.getDay());
@@ -556,6 +605,12 @@ function renderWeek(dates) {
           html += `<td class="blocked-cell">${label ? '<div class="blocked-label" style="color:#e74c3c;font-size:9px">受付<br>終了</div>' : ''}</td>`;
         } else if (list.length === 0) {
           if (!canAdd) { html += `<td class="oxno ${tdCls}"></td>`; return; }
+          const canc = all.filter(r => r.status === 'cancelled' && kindOf(r) === kind);
+          if (canc.length) {
+            const nmC = escapeHtml(canc[0].name || '未入力') + (canc.length > 1 ? ' 他' + (canc.length - 1) : '');
+            html += `<td class="empty-cell empty-clickable ${tdCls}" onclick="${addOnclick}" title="キャンセル（${escapeHtml(canc.map(r => (r.name || '未入力') + '：' + (r.cancelBy || '')).join('、'))}）"><div class="canc-cell">${nmC}</div></td>`;
+            return;
+          }
           const gcMark = (label && isGC(ds, time)) ? '<div style="color:#e67e22;font-size:9px;font-weight:700;text-align:center;line-height:1.1">一般閉</div>' : ((label && isAO(ds, time)) ? '<div style="color:#c0392b;font-size:9px;font-weight:700;text-align:center;line-height:1.1">事故のみ</div>' : '');
           html += `<td class="empty-cell empty-clickable ${tdCls}" onclick="${addOnclick}">${gcMark}</td>`;
         } else {
@@ -601,7 +656,7 @@ function renderDay(date) {
           <span class="card-name">👤 ${escapeHtml(r.name || '未入力')}${r.status === 'waiting' ? '（待ち）' : ''}${r.ruleId ? ' 🔁' : ''}</span>
           <span class="card-menu">${menuLine(r)}</span>
         </div>`).join('');
-      html += `<div class="timeline-row">
+      html += `<div class="timeline-row" data-time="${time}">
         <div class="tl-time">${time}</div>
         <div class="tl-content">
           <div style="color:#c0392b;font-size:12px;font-weight:700">⚠️ ${offReason(ds, time)}です（受付が入っています）</div>
@@ -609,14 +664,18 @@ function renderDay(date) {
         </div>
       </div>`;
     } else if (isClosed || isHoliday) {
-      html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">休業日</div></div>`;
+      html += `<div class="timeline-row tl-blocked" data-time="${time}"><div class="tl-time">${time}</div><div class="tl-content">休業日</div></div>`;
     } else if (isBlocked) {
-      html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content">🔒 ブロック済み</div></div>`;
+      html += `<div class="timeline-row tl-blocked" data-time="${time}"><div class="tl-time">${time}</div><div class="tl-content">🔒 ブロック済み</div></div>`;
     } else if (isClosed2) {
-      html += `<div class="timeline-row tl-blocked"><div class="tl-time">${time}</div><div class="tl-content" style="color:#e74c3c">🚫 受付終了</div></div>`;
+      html += `<div class="timeline-row tl-blocked" data-time="${time}"><div class="tl-time">${time}</div><div class="tl-content" style="color:#e74c3c">🚫 受付終了</div></div>`;
     } else {
       // 施術・トレーニング・酸素ルームを、横に3列で表示する
-      const cardHtml = r => `
+      const cardHtml = r => r.status === 'cancelled' ? `
+        <div class="booking-card canc">
+          <span class="card-name">🚫 ${escapeHtml(r.name || '未入力')}（キャンセル${r.cancelBy ? '・' + escapeHtml(r.cancelBy) : ''}）</span>
+          <span class="card-menu">${menuLine(r)}</span>
+        </div>` : `
         <div class="booking-card" onclick="showDetail('${r.id}')">
           <span class="card-name">👤 ${menuMark(r)}${escapeHtml(r.name || '未入力')}${r.status === 'waiting' ? '（待ち）' : ''}${r.ruleId ? ' 🔁' : ''}</span>
           <span class="card-menu">${menuLine(r)}</span>
@@ -635,7 +694,7 @@ function renderDay(date) {
         + (oxStarts.length
             ? `<div class="tl-add" onclick="openAdminBooking('${ds}','${time}','oxygen')">＋ ${oxStarts.join('・')} 開始</div>`
             : (cols.ox.length ? '' : '<div class="tl-oxhint">－</div>'));
-      html += `<div class="timeline-row">
+      html += `<div class="timeline-row" data-time="${time}">
         <div class="tl-time" style="cursor:pointer;flex-direction:column;gap:2px" title="タップして上限・コードを変更" onclick="openSlotEdit('${ds}','${time}')">${time}<span style="font-size:9px;opacity:.7">⚙️</span></div>
         <div class="tl-cols">
           <div class="tl-col">
@@ -834,6 +893,28 @@ async function submitAdminBooking() {
 // ============================================================
 // 症状一覧
 // ============================================================
+// 日報コピー（LINEで「今日の予約」と送ったときと同じ文章をコピー）
+async function copyDailyReport() {
+  let text = '';
+  try {
+    const res  = await fetch(`${GAS_URL}?action=getDailyReport&userId=${userId}`);
+    const data = await res.json();
+    if (data.error) { showToast(data.error); return; }
+    text = data.text || '';
+  } catch(e) { showToast('取得に失敗しました'); return; }
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch(e) {}
+  if (!ok) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); ok = document.execCommand('copy'); document.body.removeChild(ta);
+    } catch(e) {}
+  }
+  if (ok) showToast('📋 日報をコピーしました');
+  else window.prompt('コピーできませんでした。下の文章を選んでコピーしてください', text);
+}
+
 async function openSymptomList() {
   document.getElementById('symptomOverlay').classList.add('open');
   document.getElementById('symptomList').innerHTML =
