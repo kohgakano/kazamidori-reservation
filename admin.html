@@ -80,9 +80,15 @@
   /* 日報サイト：狭い画面は全画面、広い画面（PC）は右半分に並べる */
   #embedOverlay { display:none; position:fixed; inset:0; z-index:300; background:#fff; flex-direction:column; }
   #embedOverlay.open { display:flex; }
+  #embedGrip { display:none; position:absolute; left:-8px; top:0; bottom:0; width:14px; cursor:col-resize; z-index:5; touch-action:none; }
+  #embedGrip::after { content:''; position:absolute; left:5px; top:50%; width:4px; height:48px; margin-top:-24px; border-radius:2px; background:var(--teal); opacity:.55; }
+  #embedGrip:hover::after, body.embed-drag #embedGrip::after { opacity:1; }
+  body.embed-drag { user-select:none; cursor:col-resize; }
+  body.embed-drag #embedFrame { pointer-events:none; }
   @media (min-width: 900px) {
-    #embedOverlay { left:50%; z-index:90; border-left:3px solid var(--teal); box-shadow:-2px 0 8px rgba(0,0,0,.12); }
-    body.embed-open { padding-right:50vw; }
+    #embedOverlay { left:calc(100vw - var(--embed-w, 50vw)); z-index:90; border-left:3px solid var(--teal); box-shadow:-2px 0 8px rgba(0,0,0,.12); }
+    body.embed-open { padding-right:var(--embed-w, 50vw); }
+    #embedGrip { display:block; }
     body.embed-open .modal-overlay { padding-right:0; }
   }
   .canc-cell { background:#d5d8dc; color:#7f8c8d; font-size:10px; line-height:1.15; text-align:center; padding:2px 1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:56px; margin:0 auto; border-radius:3px }
@@ -296,6 +302,7 @@
 
 <!-- 別サイト（日報）を、この画面の中に表示 -->
 <div id="embedOverlay">
+  <div id="embedGrip" title="ドラッグで幅を変更（ダブルクリックで半分に戻す）"></div>
   <div style="background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:8px 14px;gap:8px">
     <button class="nav-btn" onclick="closeEmbed()" style="background:rgba(255,255,255,.2)">‹ 戻る</button>
     <span style="font-weight:700;font-size:14px">📝 日報</span>
@@ -915,6 +922,26 @@ async function submitAdminBooking() {
 // ============================================================
 // 別サイト（日報）を、この画面の中に表示する
 const EMBED_URL = 'https://daily-report-4wl3au2jha-an.a.run.app/admin.html';
+// ドラッグで幅を変える（左右の境目をつかんで動かす。ダブルクリックで半分に戻す）
+(function () {
+  const MIN = 25, MAX = 75;   // 日報サイトの幅（画面に対する%）
+  function setW(pct) {
+    pct = Math.max(MIN, Math.min(MAX, pct));
+    document.documentElement.style.setProperty('--embed-w', pct + 'vw');
+    return pct;
+  }
+  try { const v = parseFloat(localStorage.getItem('embedW')); if (v) setW(v); } catch (e) {}
+  const grip = document.getElementById('embedGrip');
+  let dragging = false;
+  grip.addEventListener('pointerdown', e => { dragging = true; grip.setPointerCapture(e.pointerId); document.body.classList.add('embed-drag'); e.preventDefault(); });
+  grip.addEventListener('pointermove', e => { if (dragging) setW((1 - e.clientX / window.innerWidth) * 100); });
+  const end = e => {
+    if (!dragging) return; dragging = false; document.body.classList.remove('embed-drag');
+    try { localStorage.setItem('embedW', parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--embed-w')) || 50); } catch (er) {}
+  };
+  grip.addEventListener('pointerup', end); grip.addEventListener('pointercancel', end);
+  grip.addEventListener('dblclick', () => { setW(50); try { localStorage.setItem('embedW', 50); } catch (e) {} });
+})();
 function isEmbedOpen() { return document.getElementById('embedOverlay').classList.contains('open'); }
 function openEmbed() {
   if (isEmbedOpen()) { closeEmbed(); return; }   // もう一度押すと閉じる
