@@ -343,15 +343,21 @@
       <span id="slotEditTitle">⚙️ 枠の設定</span>
       <button class="modal-close" onclick="closeSlotEdit()">✕</button>
     </div>
-    <div style="font-size:12px;color:var(--sub);margin-bottom:12px;line-height:1.6">施術の「人数（上限）」と「受付コード」を変更します。<b>毎週この曜日・この時間の設定</b>です（その日だけの変更ではありません）。</div>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button id="seModeDay"  onclick="setSlotEditMode('day')"  style="flex:1;padding:10px 4px;border:1.5px solid var(--teal);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">この日だけ</button>
+      <button id="seModeWeek" onclick="setSlotEditMode('week')" style="flex:1;padding:10px 4px;border:1.5px solid var(--teal);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">毎週の設定</button>
+    </div>
+    <div id="slotEditDesc" style="font-size:12px;color:var(--sub);margin-bottom:12px;line-height:1.6"></div>
     <div id="slotEditDateRule" style="display:none;background:#fff4e5;border:1.5px solid #f0b66b;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px;line-height:1.6">
       <div id="slotEditDateRuleText"></div>
       <button onclick="clearDateRule()" style="margin-top:6px;width:100%;background:#e67e22;color:#fff;border:none;border-radius:6px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">この日の設定を解除する</button>
     </div>
+    <div id="slotEditWeekOnly">
     <div class="field-label" style="font-size:12px;font-weight:700;margin-bottom:4px">曜日</div>
     <select id="slotEditDay" onchange="fillSlotEdit()" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:15px;margin-bottom:12px"></select>
     <div style="font-size:12px;font-weight:700;margin-bottom:4px">人数（上限）</div>
     <input type="number" id="slotEditLimit" min="0" max="10" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:15px;margin-bottom:12px">
+    </div>
     <div style="font-size:12px;font-weight:700;margin-bottom:4px">受付コード</div>
     <select id="slotEditCode" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:15px;margin-bottom:16px">
       <option value="0">通常受付</option><option value="1">満枠（即＋待ち可）</option><option value="2">一般閉（即のみ可）</option><option value="4">事故のみ（事故コードだけ可）</option><option value="3">全閉（すべて停止）</option>
@@ -554,6 +560,7 @@ async function loadAndRender(scrollMode, silent) {
     allGeneralClosed = data.generalClosed || {};
     allAccidentOnly  = data.accidentOnly || {};
     allDateRules     = data.dateRules || {};
+    allEffCodes      = data.effCodes || {};
   } catch(e) {
     if (silent) return;                // 自動更新の失敗では、今の表示をそのまま残す
     allSlots = generateDummySlots(dates);
@@ -1358,14 +1365,29 @@ async function openSlotEdit(ds, time) {
   const wd = new Date(ds + 'T00:00:00').getDay();
   document.getElementById('slotEditDay').innerHTML = DAY_NAMES.map((n, i) => `<option value="${i}" ${i === wd ? 'selected' : ''}>${n}曜日</option>`).join('');
   document.getElementById('slotEditTitle').textContent = `⚙️ ${time}〜${calcEndTime(time)} の設定`;
-  fillSlotEdit();
-  const dr = allDateRules[ds]?.[time];
+  setSlotEditMode('day');
+  document.getElementById('slotEditOverlay').classList.add('open');
+}
+let slotEditMode = 'day';
+function setSlotEditMode(m) {
+  slotEditMode = m;
+  const dd = slotEditDate.slice(5).replace('-', '/');
+  const wd = DAY_NAMES[new Date(slotEditDate + 'T00:00:00').getDay()];
+  const on = 'background:var(--teal);color:#fff', off = 'background:#fff;color:var(--teal)';
+  document.getElementById('seModeDay').style.cssText  += ';' + (m === 'day'  ? on : off);
+  document.getElementById('seModeWeek').style.cssText += ';' + (m === 'week' ? on : off);
+  document.getElementById('slotEditWeekOnly').style.display = m === 'week' ? 'block' : 'none';
+  document.getElementById('slotEditDesc').innerHTML = m === 'day'
+    ? `<b>${dd}（${wd}）のこの時間だけ</b>の受付コードを変えます。毎週の設定は変わりません。`
+    : `施術の「人数（上限）」と「受付コード」を変更します。<b>毎週${wd}曜日などの、この曜日・この時間の設定</b>です。`;
+  const dr = allDateRules[slotEditDate]?.[slotEditTime];
   const box = document.getElementById('slotEditDateRule');
-  if (dr) {
-    document.getElementById('slotEditDateRuleText').innerHTML = `⚠️ <b>${ds.slice(5).replace('-','/')} のこの時間だけ</b>「${DATE_RULE_LABEL[dr] || dr}」が入っています。<br>下の曜日ごとの設定を変えても、この日の分は変わりません。`;
+  if (m === 'week' && dr) {
+    document.getElementById('slotEditDateRuleText').innerHTML = `⚠️ <b>${dd} のこの時間だけ</b>「${DATE_RULE_LABEL[dr] || dr}」が入っています。<br>曜日ごとの設定を変えても、この日の分は変わりません。`;
     box.style.display = 'block';
   } else box.style.display = 'none';
-  document.getElementById('slotEditOverlay').classList.add('open');
+  if (m === 'day') document.getElementById('slotEditCode').value = String(Number(allEffCodes[slotEditDate]?.[slotEditTime] ?? 0));
+  else fillSlotEdit();
 }
 function fillSlotEdit() {
   const day = document.getElementById('slotEditDay').value;
@@ -1382,6 +1404,18 @@ async function clearDateRule() {
 }
 function closeSlotEdit() { document.getElementById('slotEditOverlay').classList.remove('open'); }
 async function saveSlotEdit() {
+  if (slotEditMode === 'day') {
+    const code = Number(document.getElementById('slotEditCode').value);
+    const btn = document.getElementById('slotEditSave'); btn.disabled = true; btn.textContent = '保存中…';
+    try {
+      const res  = await fetch(`${GAS_URL}?action=adminSetDateCode&userId=${userId}&date=${slotEditDate}&time=${slotEditTime}&code=${code}`);
+      const data = await res.json();
+      if (data.success) { showToast(`✅ ${slotEditDate.slice(5).replace('-','/')} ${slotEditTime} を、この日だけ変更しました`); closeSlotEdit(); await loadAndRender('keep', true); }
+      else showToast('⚠️ ' + (data.message || '保存に失敗しました'));
+    } catch(e) { showToast('⚠️ 通信エラーが発生しました'); }
+    btn.disabled = false; btn.textContent = '保存する';
+    return;
+  }
   const day   = document.getElementById('slotEditDay').value;
   const limit = Number(document.getElementById('slotEditLimit').value);
   const code  = Number(document.getElementById('slotEditCode').value);
@@ -1497,8 +1531,9 @@ function formatDateJapanese(d) {
   return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）`;
 }
 // 実際の受付（目印の休業日・受付終了などを除く）
+let allEffCodes = {};    // その日・その時間に効いている受付コード { 日付: { 時間: 0〜4 } }
 let allDateRules = {};   // その日だけの設定 { 日付: { 時間: closed|generalclosed|accidentonly } }
-const DATE_RULE_LABEL = { closed: '受付終了', generalclosed: '一般閉', accidentonly: '事故のみ' };
+const DATE_RULE_LABEL = { closed: '受付終了', generalclosed: '一般閉', accidentonly: '事故のみ', codeover: '受付コードの変更' };
 function isAO(ds, time) { return (allAccidentOnly[ds] || []).includes(time); }
 function isGC(ds, time) { return (allGeneralClosed[ds] || []).includes(time) && !isAO(ds, time); }   // 一般閉（事故のみは別表示）
 function isRealRes(r) { return r.status === 'confirmed' || r.status === 'waiting'; }
