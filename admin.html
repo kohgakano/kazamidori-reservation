@@ -344,6 +344,10 @@
       <button class="modal-close" onclick="closeSlotEdit()">✕</button>
     </div>
     <div style="font-size:12px;color:var(--sub);margin-bottom:12px;line-height:1.6">施術の「人数（上限）」と「受付コード」を変更します。<b>毎週この曜日・この時間の設定</b>です（その日だけの変更ではありません）。</div>
+    <div id="slotEditDateRule" style="display:none;background:#fff4e5;border:1.5px solid #f0b66b;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px;line-height:1.6">
+      <div id="slotEditDateRuleText"></div>
+      <button onclick="clearDateRule()" style="margin-top:6px;width:100%;background:#e67e22;color:#fff;border:none;border-radius:6px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">この日の設定を解除する</button>
+    </div>
     <div class="field-label" style="font-size:12px;font-weight:700;margin-bottom:4px">曜日</div>
     <select id="slotEditDay" onchange="fillSlotEdit()" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:15px;margin-bottom:12px"></select>
     <div style="font-size:12px;font-weight:700;margin-bottom:4px">人数（上限）</div>
@@ -549,6 +553,7 @@ async function loadAndRender(scrollMode, silent) {
     allSlots = data.slots || {};
     allGeneralClosed = data.generalClosed || {};
     allAccidentOnly  = data.accidentOnly || {};
+    allDateRules     = data.dateRules || {};
   } catch(e) {
     if (silent) return;                // 自動更新の失敗では、今の表示をそのまま残す
     allSlots = generateDummySlots(dates);
@@ -638,7 +643,7 @@ function renderWeek(dates) {
             html += `<td class="empty-cell empty-clickable ${tdCls}" onclick="${addOnclick}" title="キャンセル（${escapeHtml(canc.map(r => (r.name || '未入力') + '：' + (r.cancelBy || '')).join('、'))}）"><div class="canc-cell">${nmC}</div></td>`;
             return;
           }
-          const gcMark = (label && isGC(ds, time)) ? '<div style="color:#e67e22;font-size:9px;font-weight:700;text-align:center;line-height:1.1">一般閉</div>' : ((label && isAO(ds, time)) ? '<div style="color:#c0392b;font-size:9px;font-weight:700;text-align:center;line-height:1.1">事故のみ</div>' : '');
+          const gcMark = (label && isGC(ds, time)) ? `<div style="color:#e67e22;font-size:9px;font-weight:700;text-align:center;line-height:1.1">一般閉${allDateRules[ds]?.[time] ? '<br>(この日のみ)' : ''}</div>` : ((label && isAO(ds, time)) ? `<div style="color:#c0392b;font-size:9px;font-weight:700;text-align:center;line-height:1.1">事故のみ${allDateRules[ds]?.[time] ? '<br>(この日のみ)' : ''}</div>` : '');
           html += `<td class="empty-cell empty-clickable ${tdCls}" onclick="${addOnclick}">${gcMark}</td>`;
         } else {
           const first = list[0];
@@ -725,7 +730,7 @@ function renderDay(date) {
         <div class="tl-time" style="cursor:pointer;flex-direction:column;gap:2px" title="タップして上限・コードを変更" onclick="openSlotEdit('${ds}','${time}')">${time}<span style="font-size:9px;opacity:.7">⚙️</span></div>
         <div class="tl-cols">
           <div class="tl-col">
-            ${isGC(ds, time) ? '<div style="color:#e67e22;font-size:11px;font-weight:700">🟠 一般閉（即のみ受付）</div>' : ''}${isAO(ds, time) ? '<div style="color:#c0392b;font-size:11px;font-weight:700">🔴 事故のみ（事故コードだけ受付）</div>' : ''}
+            ${isGC(ds, time) ? '<div style="color:#e67e22;font-size:11px;font-weight:700">🟠 一般閉（即のみ受付）</div>' : ''}${isAO(ds, time) ? '<div style="color:#c0392b;font-size:11px;font-weight:700">🔴 事故のみ（事故コードだけ受付）' + (allDateRules[ds]?.[time] ? '（この日のみ）' : '') + '</div>' : ''}
             ${txCol}
           </div>
           <div class="tl-col">${trCol}</div>
@@ -1345,20 +1350,35 @@ async function saveSettingsFromUI() {
 // カレンダーの時間をタップして、その曜日×時間の人数（上限）とコードを変更
 // ============================================================
 let slotEditTime = null;
+let slotEditDate = '';
 async function openSlotEdit(ds, time) {
-  slotEditTime = time;
+  slotEditTime = time; slotEditDate = ds;
   if (Object.keys(slotLimits).length === 0) await loadLimitSettings();
   if (Object.keys(slotLimits).length === 0) return;   // 読み込み失敗（トースト表示済み）
   const wd = new Date(ds + 'T00:00:00').getDay();
   document.getElementById('slotEditDay').innerHTML = DAY_NAMES.map((n, i) => `<option value="${i}" ${i === wd ? 'selected' : ''}>${n}曜日</option>`).join('');
   document.getElementById('slotEditTitle').textContent = `⚙️ ${time}〜${calcEndTime(time)} の設定`;
   fillSlotEdit();
+  const dr = allDateRules[ds]?.[time];
+  const box = document.getElementById('slotEditDateRule');
+  if (dr) {
+    document.getElementById('slotEditDateRuleText').innerHTML = `⚠️ <b>${ds.slice(5).replace('-','/')} のこの時間だけ</b>「${DATE_RULE_LABEL[dr] || dr}」が入っています。<br>下の曜日ごとの設定を変えても、この日の分は変わりません。`;
+    box.style.display = 'block';
+  } else box.style.display = 'none';
   document.getElementById('slotEditOverlay').classList.add('open');
 }
 function fillSlotEdit() {
   const day = document.getElementById('slotEditDay').value;
   document.getElementById('slotEditLimit').value = slotLimits[slotEditTime]?.[day] ?? 0;
   document.getElementById('slotEditCode').value  = String(Number(slotCodes[slotEditTime]?.[day] ?? 0));
+}
+async function clearDateRule() {
+  try {
+    const res  = await fetch(`${GAS_URL}?action=adminClearDateRule&userId=${userId}&date=${slotEditDate}&time=${slotEditTime}`);
+    const data = await res.json();
+    if (data.success) { showToast('✅ この日の設定を解除しました'); closeSlotEdit(); await loadAndRender('keep', true); }
+    else showToast('⚠️ ' + (data.message || '解除に失敗しました'));
+  } catch(e) { showToast('⚠️ 通信エラーが発生しました'); }
 }
 function closeSlotEdit() { document.getElementById('slotEditOverlay').classList.remove('open'); }
 async function saveSlotEdit() {
@@ -1477,6 +1497,8 @@ function formatDateJapanese(d) {
   return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）`;
 }
 // 実際の受付（目印の休業日・受付終了などを除く）
+let allDateRules = {};   // その日だけの設定 { 日付: { 時間: closed|generalclosed|accidentonly } }
+const DATE_RULE_LABEL = { closed: '受付終了', generalclosed: '一般閉', accidentonly: '事故のみ' };
 function isAO(ds, time) { return (allAccidentOnly[ds] || []).includes(time); }
 function isGC(ds, time) { return (allGeneralClosed[ds] || []).includes(time) && !isAO(ds, time); }   // 一般閉（事故のみは別表示）
 function isRealRes(r) { return r.status === 'confirmed' || r.status === 'waiting'; }
