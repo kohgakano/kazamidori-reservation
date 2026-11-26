@@ -347,6 +347,10 @@
       <button id="seModeDay"  onclick="setSlotEditMode('day')"  style="flex:1;padding:10px 4px;border:1.5px solid var(--teal);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">この日だけ</button>
       <button id="seModeWeek" onclick="setSlotEditMode('week')" style="flex:1;padding:10px 4px;border:1.5px solid var(--teal);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">毎週の設定</button>
     </div>
+    <div id="slotEditDateWrap" style="display:none;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:4px">日付</div>
+      <select id="slotEditDateSel" onchange="changeSlotEditDate(this.value)" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:15px"></select>
+    </div>
     <div id="slotEditDesc" style="font-size:12px;color:var(--sub);margin-bottom:12px;line-height:1.6"></div>
     <div id="slotEditDateRule" style="display:none;background:#fff4e5;border:1.5px solid #f0b66b;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px;line-height:1.6">
       <div id="slotEditDateRuleText"></div>
@@ -554,6 +558,7 @@ async function loadAndRender(scrollMode, silent) {
   updateNavLabel(dates);
   try {
     const ds  = dates.map(d => formatDate(d));
+    currentDateStrs = ds;
     const res = await fetch(`${GAS_URL}?action=adminGetSlots&dates=${ds.join(',')}&userId=${userId}`);
     const data = await res.json();
     allSlots = data.slots || {};
@@ -1358,6 +1363,7 @@ async function saveSettingsFromUI() {
 // ============================================================
 let slotEditTime = null;
 let slotEditDate = '';
+let currentDateStrs = [];   // いま画面に出ている日付（週表示なら7日分）
 async function openSlotEdit(ds, time) {
   slotEditTime = time; slotEditDate = ds;
   if (Object.keys(slotLimits).length === 0) await loadLimitSettings();
@@ -1369,8 +1375,23 @@ async function openSlotEdit(ds, time) {
   document.getElementById('slotEditOverlay').classList.add('open');
 }
 let slotEditMode = 'day';
+function changeSlotEditDate(ds) {
+  slotEditDate = ds;
+  document.getElementById('slotEditDay').value = String(new Date(ds + 'T00:00:00').getDay());
+  setSlotEditMode(slotEditMode);
+}
 function setSlotEditMode(m) {
   slotEditMode = m;
+  // 週表示のときは、どの日の設定かを選べるようにする（時間の行は、日付が決まらないため）
+  const wrap = document.getElementById('slotEditDateWrap');
+  const list = currentDateStrs.length ? currentDateStrs : [slotEditDate];
+  if (m === 'day' && list.length > 1) {
+    document.getElementById('slotEditDateSel').innerHTML = list.map(d => {
+      const wd = DAY_NAMES[new Date(d + 'T00:00:00').getDay()];
+      return `<option value="${d}" ${d === slotEditDate ? 'selected' : ''}>${d.slice(5).replace('-', '/')}（${wd}）</option>`;
+    }).join('');
+    wrap.style.display = 'block';
+  } else wrap.style.display = 'none';
   const dd = slotEditDate.slice(5).replace('-', '/');
   const wd = DAY_NAMES[new Date(slotEditDate + 'T00:00:00').getDay()];
   const on = 'background:var(--teal);color:#fff', off = 'background:#fff;color:var(--teal)';
