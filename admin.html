@@ -1407,7 +1407,11 @@ function setSlotEditMode(m) {
     document.getElementById('slotEditDateRuleText').innerHTML = `⚠️ <b>${dd} のこの時間だけ</b>「${DATE_RULE_LABEL[dr] || dr}」が入っています。<br>曜日ごとの設定を変えても、この日の分は変わりません。`;
     box.style.display = 'block';
   } else box.style.display = 'none';
-  if (m === 'day') document.getElementById('slotEditCode').value = String(Number(allEffCodes[slotEditDate]?.[slotEditTime] ?? 0));
+  const sel = document.getElementById('slotEditCode');
+  const hasReset = !!sel.querySelector('option[value="reset"]');
+  if (m === 'day' && !hasReset) sel.insertAdjacentHTML('afterbegin', '<option value="reset">毎週の設定に戻す（この日の設定を解除）</option>');
+  if (m !== 'day' && hasReset) sel.querySelector('option[value="reset"]').remove();
+  if (m === 'day') sel.value = String(Number(allEffCodes[slotEditDate]?.[slotEditTime] ?? 0));
   else fillSlotEdit();
 }
 function fillSlotEdit() {
@@ -1426,12 +1430,16 @@ async function clearDateRule() {
 function closeSlotEdit() { document.getElementById('slotEditOverlay').classList.remove('open'); }
 async function saveSlotEdit() {
   if (slotEditMode === 'day') {
-    const code = Number(document.getElementById('slotEditCode').value);
+    const raw = document.getElementById('slotEditCode').value;
+    const isReset = raw === 'reset';
     const btn = document.getElementById('slotEditSave'); btn.disabled = true; btn.textContent = '保存中…';
     try {
-      const res  = await fetch(`${GAS_URL}?action=adminSetDateCode&userId=${userId}&date=${slotEditDate}&time=${slotEditTime}&code=${code}`);
+      const url  = isReset
+        ? `${GAS_URL}?action=adminClearDateRule&userId=${userId}&date=${slotEditDate}&time=${slotEditTime}`
+        : `${GAS_URL}?action=adminSetDateCode&userId=${userId}&date=${slotEditDate}&time=${slotEditTime}&code=${Number(raw)}`;
+      const res  = await fetch(url);
       const data = await res.json();
-      if (data.success) { showToast(`✅ ${slotEditDate.slice(5).replace('-','/')} ${slotEditTime} を、この日だけ変更しました`); closeSlotEdit(); await loadAndRender('keep', true); }
+      if (data.success) { showToast(isReset ? `✅ ${slotEditDate.slice(5).replace('-','/')} ${slotEditTime} を、毎週の設定に戻しました${data.count ? '' : '（この日だけの設定は入っていませんでした）'}` : `✅ ${slotEditDate.slice(5).replace('-','/')} ${slotEditTime} を、この日だけ変更しました`); closeSlotEdit(); await loadAndRender('keep', true); }
       else showToast('⚠️ ' + (data.message || '保存に失敗しました'));
     } catch(e) { showToast('⚠️ 通信エラーが発生しました'); }
     btn.disabled = false; btn.textContent = '保存する';
