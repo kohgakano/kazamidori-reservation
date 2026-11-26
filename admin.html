@@ -1444,6 +1444,7 @@ async function saveLimitSettings() {
         slotCodes[time][day] = newCodes[time];
       });
       showToast('✅ 上限設定を保存しました');
+      loadAndRender('keep', true);   // カレンダーの表示（受付コード・事故のみ・一般閉など）も最新にする
     } else {
       showToast('⚠️ ' + (data.message || '保存に失敗しました'));
     }
