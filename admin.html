@@ -977,7 +977,8 @@ function closeEmbed() {
 async function copyDailyReport() {
   let text = '';
   try {
-    const res  = await fetch(`${GAS_URL}?action=getDailyReport&userId=${userId}`);
+    const target = currentDateStrs[0] || '';   // いま開いている日付（週表示のときは、表の先頭の日）
+    const res  = await fetch(`${GAS_URL}?action=getDailyReport&userId=${userId}&date=${target}`);
     const data = await res.json();
     if (data.error) { showToast(data.error); return; }
     text = data.text || '';
@@ -991,7 +992,7 @@ async function copyDailyReport() {
       document.body.appendChild(ta); ta.select(); ok = document.execCommand('copy'); document.body.removeChild(ta);
     } catch(e) {}
   }
-  if (ok) showToast('📋 日報をコピーしました');
+  if (ok) showToast('📋 ' + (currentDateStrs[0] ? currentDateStrs[0].slice(5).replace('-', '/') + ' の' : '') + '日報をコピーしました');
   else window.prompt('コピーできませんでした。下の文章を選んでコピーしてください', text);
 }
 
